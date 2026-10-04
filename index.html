@@ -1,0 +1,435 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Team Lineup Manager</title>
+<style>
+*{box-sizing:border-box}
+body{font-family:system-ui,sans-serif;margin:0;background:#f3f5f7;color:#222}
+header{background:#0b6e3a;color:#fff;padding:.7rem 1rem;display:flex;gap:1rem;align-items:center;flex-wrap:wrap}
+header h1{font-size:1.2rem;margin:0;flex:1}
+main{display:grid;gap:1rem;padding:1rem;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));max-width:1100px;margin:auto}
+section{background:#fff;border-radius:8px;padding:1rem;box-shadow:0 1px 3px #0002}
+h2{margin:.2rem 0 .6rem;font-size:1.05rem}
+button,select,input{font:inherit;padding:.4rem .6rem;border-radius:6px;border:1px solid #bbb}
+button{background:#0b6e3a;color:#fff;border:0;cursor:pointer}
+button.sec{background:#e3e6e9;color:#222}
+button.danger{background:#c0392b}
+.pitch{background:linear-gradient(#2e9e55,#27894a);border:2px solid #fff;border-radius:8px;padding:.5rem;min-height:340px;display:flex;flex-direction:column;justify-content:space-around;gap:.4rem}
+.row{display:flex;justify-content:space-around;gap:.3rem}
+.slot{min-width:72px;text-align:center;background:#ffffffee;border:2px solid transparent;border-radius:8px;padding:.35rem .3rem;cursor:pointer;font-size:.85rem}
+.slot{touch-action:none;user-select:none;-webkit-user-select:none}
+.slot.drop,li.bench.drop,#bench.drop{outline:3px dashed #f39c12;background:#fff3d6}
+.slot.drag,li.bench.drag{opacity:.4}
+.ghost{position:fixed;z-index:50;pointer-events:none;background:#fff;border:2px solid #f39c12;border-radius:8px;padding:.35rem .6rem;font-size:.85rem;box-shadow:0 2px 8px #0005;transform:translate(-50%,-50%)}
+li.bench{touch-action:none;user-select:none;-webkit-user-select:none}
+.slot small{display:block;color:#666}
+.slot.sel{border-color:#f39c12;background:#fff3d6}
+.slot.empty{opacity:.6;border-style:dashed;border-color:#888}
+ul{list-style:none;margin:0;padding:0}
+li{display:flex;align-items:center;gap:.5rem;padding:.35rem .2rem;border-bottom:1px solid #eee;cursor:default}
+li.bench{cursor:pointer}
+li.sel{background:#fff3d6}
+li .grow{flex:1}
+.mins{color:#666;font-size:.85rem}
+li.due{background:#d9f7e3;font-weight:700}
+input.on{width:4.5rem}
+.add{display:flex;gap:.4rem;margin-bottom:.5rem}.add input{flex:1}
+.clock{font-size:2rem;font-weight:700;font-variant-numeric:tabular-nums}
+.log{max-height:180px;overflow:auto;font-size:.85rem}
+.hint{color:#666;font-size:.85rem}
+.ctl{display:flex;gap:.4rem;flex-wrap:wrap;align-items:center}
+body.locked header,body.locked main{display:none}
+.overlay{position:fixed;inset:0;background:#f3f5f7;display:none;align-items:center;justify-content:center;padding:1rem;z-index:10;overflow:auto}
+.overlay.show{display:flex}
+.overlay.modal{background:#0007;align-items:flex-start}
+.card{background:#fff;border-radius:8px;padding:1rem;box-shadow:0 1px 3px #0003;width:100%;max-width:460px;display:flex;flex-direction:column;gap:.5rem}
+.card label{display:flex;flex-direction:column;gap:.2rem;font-size:.9rem}
+.card label.chk{flex-direction:row;align-items:center;gap:.4rem}
+.err{color:#c0392b;font-size:.85rem;min-height:1em;margin:0}
+header input{max-width:160px}
+.grp{font-weight:700;font-size:.85rem;color:#0b6e3a;margin-top:.4rem}
+.positions{display:flex;gap:.25rem;align-items:center;flex-wrap:wrap}
+.pos-choice{display:flex;align-items:center;gap:.1rem;font-size:.8rem}
+</style>
+</head>
+<body class="locked">
+<header>
+<h1>⚽ Team Lineup Manager</h1>
+<label>Team <input id="team" placeholder="Team name" maxlength="40"></label>
+<label>Format
+<select id="size"></select></label>
+<label>Formation
+<select id="formation"></select></label>
+<span class="ctl"><button class="sec" id="saveBtn">💾 Save / Load</button><button class="sec" id="pdfBtn">📄 Export PDF</button>
+<button class="sec" id="adminBtn" hidden>👤 Admin</button><button class="sec" id="logoutBtn">Log out</button></span>
+</header>
+<main>
+<section>
+<h2>Starting line-up</h2>
+<div class="pitch" id="pitch"></div>
+<p class="hint" id="hint">Drag players to move them (onto another position to swap, onto the bench to substitute off), or tap a position then another position/bench player.</p>
+</section>
+<section>
+<h2>Match clock</h2>
+<div class="ctl"><span class="clock" id="clock">00:00</span>
+<button id="startStop">Start</button><button class="sec" id="resetClock">Reset</button></div>
+<p class="hint">Minutes played are tracked for on-pitch players while the clock runs.</p>
+<h2>Bench / substitutes</h2>
+<ul id="bench"></ul>
+<h2>Substitution log</h2>
+<div class="log"><ul id="log"></ul></div>
+</section>
+<section>
+<h2>Squad</h2>
+<form class="add" id="addForm"><input id="name" placeholder="Player name(s), comma separated" required maxlength="200"><span class="positions" title="Preferred positions"><label class="pos-choice"><input type="checkbox" data-new-pos value="GK">GK</label><label class="pos-choice"><input type="checkbox" data-new-pos value="D">D</label><label class="pos-choice"><input type="checkbox" data-new-pos value="M">M</label><label class="pos-choice"><input type="checkbox" data-new-pos value="F">F</label></span><button id="addBench" type="button">Add to bench</button><button>Add</button></form>
+<p class="hint" id="squadTotals"></p>
+<ul id="squad"></ul>
+<h2>Warm-up routine</h2>
+<form class="add" id="wuForm"><input id="wuName" placeholder="Exercise (e.g. Dynamic stretches)" required maxlength="60"><input id="wuMins" class="on" type="number" min="1" max="60" placeholder="Mins"><button>Add</button></form>
+<ul id="warmup"></ul>
+<p class="hint" id="wuTotal"></p>
+<p><button class="danger" id="resetAll">Clear everything</button></p>
+</section>
+</main>
+<div class="overlay" id="login"><form class="card" id="loginForm">
+<h2 id="loginTitle">Sign in</h2>
+<p class="hint" id="loginHint"></p>
+<label>Username<input id="lUser" autocomplete="username" required maxlength="40"></label>
+<label>Password<input id="lPass" type="password" autocomplete="current-password" required></label>
+<label class="chk" id="rememberRow"><input type="checkbox" id="lRemember"> Remember me</label>
+<p class="err" id="loginErr"></p>
+<button id="loginGo">Sign in</button><button type="button" class="sec" id="forgotBtn">Forgot password?</button></form></div>
+<div class="overlay modal" id="admin"><div class="card">
+<h2>Admin – user accounts</h2>
+<ul id="userList"></ul>
+<form id="passwordResetForm" class="card" style="box-shadow:none;padding:0">
+<label>Reset password for<select id="resetUser" required></select></label>
+<label>New password (min 8 characters)<input id="resetPass" type="password" required minlength="8" autocomplete="new-password"></label>
+<p class="err" id="resetErr"></p><button>Reset password</button></form>
+<form id="userForm" class="card" style="box-shadow:none;padding:0">
+<label>New username<input id="nUser" required maxlength="40" autocomplete="off"></label>
+<label>Password (min 8 characters)<input id="nPass" type="password" required minlength="8" autocomplete="new-password"></label>
+<label class="chk"><input type="checkbox" id="nAdmin"> Administrator</label>
+<p class="err" id="adminErr"></p><button>Create user</button></form>
+<button class="sec" data-close="admin">Close</button></div></div>
+<div class="overlay modal" id="saves"><div class="card">
+<h2>Saved line-ups</h2>
+<label class="chk"><input type="checkbox" id="autoSaveHistory"> Automatically keep history (last 50 changes)</label>
+<form id="saveForm" class="card" style="box-shadow:none;padding:0">
+<label>Name<input id="sName" required maxlength="60"></label>
+<label>Folder (optional)<input id="sFolder" maxlength="40" list="folders"></label><datalist id="folders"></datalist>
+<button>Save current line-up</button></form>
+<div id="saveList"></div>
+<h2>Automatic history</h2>
+<div id="historyList"></div>
+<button class="sec" data-close="saves">Close</button></div></div>
+<script>
+const FORMATIONS={
+  5:{"2-2":[1,2,2],"1-2-1":[1,1,2,1],"3-1":[1,3,1]},
+  7:{"2-3-1":[1,2,3,1],"3-2-1":[1,3,2,1],"2-2-2":[1,2,2,2]},
+  9:{"3-3-2":[1,3,3,2],"3-2-3":[1,3,2,3],"2-3-3":[1,2,3,3]},
+  11:{"4-4-2":[1,4,4,2],"4-3-3":[1,4,3,3],"3-5-2":[1,3,5,2],"4-2-3-1":[1,4,2,3,1]}
+};
+const KEY="lineup-manager-v1";
+const HISTORY_KEY="lineup-history-v1",AUTO_HISTORY_KEY="lineup-auto-history-v1";
+let historyTimer=null,lastHistoryAt=0,lastHistorySignature="";
+const autoHistoryEnabled=()=>localStorage.getItem(AUTO_HISTORY_KEY)!=="false";
+let S=load();
+let sel=null,timer=null,lastTick=0;
+function load(){try{const s=JSON.parse(localStorage.getItem(KEY));if(s&&s.players)return s}catch(e){}
+ return{team:"",players:[],size:7,formation:"2-3-1",slots:[],log:[],seconds:0,running:false}}
+function save(){localStorage.setItem(KEY,JSON.stringify(S));scheduleHistory()}
+const $=id=>document.getElementById(id);
+const rows=()=>FORMATIONS[S.size][S.formation];
+const count=()=>rows().reduce((a,b)=>a+b,0);
+const P=id=>S.players.find(p=>p.id===id);
+const playerPositions=p=>(Array.isArray(p.positions)?p.positions:(p.pos?[p.pos]:[])).filter(x=>["GK","D","M","F"].includes(x));
+const posLabel=p=>playerPositions(p).join("/");
+const mmss=s=>String(Math.floor(s/60)).padStart(2,"0")+":"+String(s%60).padStart(2,"0");
+function fixSlots(){
+  const n=count();S.slots=S.slots.slice(0,n);while(S.slots.length<n)S.slots.push(null);
+  S.slots=S.slots.map(id=>P(id)&&P(id).avail!==false?id:null);
+}
+function bench(){return S.players.filter(p=>p.avail!==false&&!S.slots.includes(p.id))}
+function swap(a,b){ // a: slot index; b: {slot}|{player}
+  const old=S.slots[a];
+  if(b.slot!==undefined){const t=S.slots[b.slot];S.slots[b.slot]=old;S.slots[a]=t;}
+  else{S.slots[a]=b.player;
+   const on=P(b.player),off=P(old);
+   S.log.unshift(`${mmss(S.seconds)} – ${on.name} on${off?`, ${off.name} off":""}`);}
+}
+function render(){
+  fixSlots();
+  $("size").innerHTML=Object.keys(FORMATIONS).map(k=>`<option value="${k}"${+k===S.size?" selected":""}>${k}-a-side</option>`).join("");
+  $("formation").innerHTML=Object.keys(FORMATIONS[S.size]).map(k=>`<option${k===S.formation?" selected":""}>${k}</option>`).join("");
+  const pitch=$("pitch");pitch.innerHTML="";let i=0;const out=[];
+  rows().forEach(c=>{const r=[];for(let j=0;j<c;j++)r.push(i++);out.push(r)});
+  out.reverse().forEach(r=>{const d=document.createElement("div");d.className="row";
+   r.forEach(idx=>{const p=P(S.slots[idx]);const b=document.createElement("div");
+    b.dataset.slot=idx;b.className="slot"+(p?"":" empty")+(sel===idx?" sel":"");
+    b.innerHTML=p?`${esc(p.name)}${posLabel(p)?`<small>(${esc(posLabel(p))})</small>":""}<small>${mmss(p.secs||0)}</small>`:(idx===0?"GK":"Empty");
+    b.onclick=()=>{if(!dragged)pick(idx)};d.appendChild(b)});
+   pitch.appendChild(d)});
+  $("bench").innerHTML=bench().map(p=>`<li class="bench${p.on!=null&&S.seconds>=p.on*60?" due":""}" data-id="${p.id}"><span class="grow">${esc(p.name)}${posLabel(p)?` <small>(${esc(posLabel(p))})</small>`:""}</span><input class="on" type="number" min="0" max="999" data-on="${p.id}" value="${p.on??""}" placeholder="On"></li>`).join("");
+  document.querySelectorAll("input[data-on]").forEach(i=>{i.onpointerdown=e=>e.stopPropagation();i.onchange=()=>{P(i.dataset.on).on=i.value===""?null:Math.max(0,+i.value);save();render()}});
+  document.querySelectorAll("#bench li.bench").forEach(li=>li.onclick=e=>{if(e.target.closest("input"))return;if(!dragged)benchPick(li.dataset.id)});
+  initDrag();
+  $("squad").innerHTML=S.players.map(p=>`<li${p.avail===false?' style="opacity:.55"':""}><input type="checkbox" data-avail="${p.id}" title="Available"${p.avail===false?"":" checked"}><span class="grow">${esc(p.name)}</span><span class="positions">${["GK","D","M","F"].map(v=>`<label class="pos-choice"><input type="checkbox" data-player-pos="${p.id}" value="${v}"${playerPositions(p).includes(v)?" checked":""}>${v}</label>`).join("")}</span><button class="sec" data-del="${p.id}">✕</button></li>`).join("");
+  const av=S.players.filter(p=>p.avail!==false).length;$("squadTotals").textContent=`Total players: ${S.players.length} · Available: ${av} · Unavailable: ${S.players.length-av}`;
+  document.querySelectorAll("[data-avail]").forEach(c=>c.onchange=()=>{P(c.dataset.avail).avail=c.checked;sel=null;save();render()});
+  document.querySelectorAll("[data-player-pos]").forEach(c=>c.onchange=()=>{const p=P(c.dataset.playerPos);p.positions=[...document.querySelectorAll(`[data-player-pos="${c.dataset.playerPos}"]:checked`)].map(x=>x.value);save();render()});
+  document.querySelectorAll("[data-del]").forEach(b=>b.onclick=()=>{S.players=S.players.filter(p=>p.id!==b.dataset.del);sel=null;save();render()});
+  S.warmup=S.warmup||[];
+  $("warmup").innerHTML=S.warmup.map((w,i)=>`<li><input type="checkbox" data-wdone="${i}" title="Done"${w.done?" checked":""}><span class="grow"${w.done?' style="text-decoration:line-through"':""}>${esc(w.name)} (${w.mins||0} min)</span><button class="sec" data-wup="${i}" ${i===0?"disabled":""}>↑</button><button class="sec" data-wdel="${i}">✕</button></li>`).join("");
+  const wt=S.warmup.reduce((a,w)=>a+(+w.mins||0),0);$("wuTotal").textContent=wt?`Total warm-up: ${wt} min`:"";
+  document.querySelectorAll("[data-wdone]").forEach(c=>c.onchange=()=>{S.warmup[+c.dataset.wdone].done=c.checked;render()});
+  document.querySelectorAll("[data-wdel]").forEach(b=>b.onclick=()=>{S.warmup.splice(+b.dataset.wdel,1);render()});
+  document.querySelectorAll("[data-wup]").forEach(b=>b.onclick=()=>{const i=+b.dataset.wup;if(i>0){[S.warmup[i-1],S.warmup[i]]=[S.warmup[i],S.warmup[i-1]];render()}});
+  $("log").innerHTML=S.log.map(l=>`<li>${esc(l)}</li>`).join("");
+  $("team").value=S.team||"";
+  $("clock").textContent=mmss(S.seconds);
+  $("startStop").textContent=S.running?"Pause":"Start";
+  save();
+}
+function esc(s){return s.replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]))}
+function pick(idx){
+  if(sel===null){sel=idx}
+  else if(sel===idx){sel=null}
+  else{swap(sel,{slot:idx});sel=null}
+  render()}
+function benchPick(id){
+  if(sel===null){const e=S.slots.indexOf(null);if(e>=0){S.slots[e]=id;S.log.unshift(`${mmss(S.seconds)} – ${P(id).name} on`);render()}return}
+  swap(sel,{player:id});sel=null;render()}
+let dragged=false;
+function initDrag(){
+  document.querySelectorAll(".slot,#bench li.bench").forEach(el=>{
+   el.onpointerdown=e=>{
+    if(e.button>0)return;
+    const from=el.dataset.slot!==undefined?{slot:+el.dataset.slot}:{player:el.dataset.id};
+    if(from.slot!==undefined&&!S.slots[from.slot])return;
+    const x0=e.clientX,y0=e.clientY;let ghost=null,over=null;
+    const target=(x,y)=>{const t=document.elementFromPoint(x,y);if(!t)return null;
+     return t.closest(".slot")||t.closest("#bench li.bench")||t.closest("#bench")};
+    const mark=t=>{if(over&&over!==t)over.classList.remove("drop");over=t;if(t)t.classList.add("drop")};
+    const move=ev=>{
+     if(!ghost){if(Math.hypot(ev.clientX-x0,ev.clientY-y0)<6)return;
+      ghost=document.createElement("div");ghost.className="ghost";
+      ghost.textContent=(from.slot!==undefined?P(S.slots[from.slot]):P(from.player)).name;
+      document.body.appendChild(ghost);el.classList.add("drag");dragged=true;sel=null}
+     ghost.style.left=ev.clientX+"px";ghost.style.top=ev.clientY+"px";
+     mark(target(ev.clientX,ev.clientY))};
+    const end=ev=>{
+     document.removeEventListener("pointermove",move);document.removeEventListener("pointerup",end);document.removeEventListener("pointercancel",end);
+     if(!ghost)return;
+     const t=ev.type==="pointerup"?target(ev.clientX,ev.clientY):null;
+     ghost.remove();el.classList.remove("drag");mark(null);
+     if(t)dropOn(from,t);
+     setTimeout(()=>dragged=false,0);render()};
+    document.addEventListener("pointermove",move);document.addEventListener("pointerup",end);document.addEventListener("pointercancel",end)}})}
+function dropOn(from,t){
+  if(from.slot!==undefined){
+   if(t.dataset.slot!==undefined){if(+t.dataset.slot!==from.slot)swap(from.slot,{slot:+t.dataset.slot})}
+   else if(t.dataset.id){swap(from.slot,{player:t.dataset.id})}
+   else{const off=P(S.slots[from.slot]);S.slots[from.slot]=null;S.log.unshift(`${mmss(S.seconds)} – ${off.name} off`)}
+  }else{
+   if(t.dataset.slot!==undefined){const i=+t.dataset.slot,old=P(S.slots[i]);
+    S.slots[i]=from.player;S.log.unshift(`${mmss(S.seconds)} – ${P(from.player).name} on${old?`, ${old.name} off`:""}`)}}}
+function tick(){
+  const now=Date.now(),d=Math.floor((now-lastTick)/1000);
+  if(d>=1){lastTick+=d*1000;S.seconds+=d;S.slots.forEach(id=>{const p=P(id);if(p)p.secs=(p.secs||0)+d});
+   if(document.activeElement&&document.activeElement.matches("input[data-on]")){$("clock").textContent=mmss(S.seconds);save()}else render()}}
+function setRun(r){S.running=r;clearInterval(timer);if(r){lastTick=Date.now();timer=setInterval(tick,250)}render()}
+$("size").onchange=e=>{S.size=+e.target.value;S.formation=Object.keys(FORMATIONS[S.size])[0];sel=null;render()};
+$("formation").onchange=e=>{S.formation=e.target.value;sel=null;render()};
+function addPlayers(toBench){
+  const names=$("name").value.split(/[,
+;]/).map(x=>x.trim()).filter(Boolean);if(!names.length)return;
+  const positions=[...document.querySelectorAll("[data-new-pos]:checked")].map(x=>x.value);
+  names.forEach(n=>{
+   const id=(crypto.randomUUID?crypto.randomUUID():String(Date.now()+Math.random()));
+   S.players.push({id,name:n,secs:0,positions});
+   if(!toBench){const e0=S.slots.indexOf(null);if(e0>=0&&e0<count())S.slots[e0]=id}});
+  $("name").value="";document.querySelectorAll("[data-new-pos]").forEach(x=>x.checked=false);render()}
+$("addForm").onsubmit=e=>{e.preventDefault();addPlayers(false)};
+$("addBench").onclick=()=>{if($("name").value.trim())addPlayers(true);else $("name").reportValidity()};
+$("wuForm").onsubmit=e=>{e.preventDefault();const n=$("wuName").value.trim();if(!n)return;
+  (S.warmup=S.warmup||[]).push({name:n,mins:Math.max(0,+$("wuMins").value||0),done:false});
+  $("wuName").value="";$("wuMins").value="";render()};
+$("startStop").onclick=()=>setRun(!S.running);
+$("resetClock").onclick=()=>{if(confirm("Reset clock and minutes played?")){S.seconds=0;S.log=[];S.players.forEach(p=>p.secs=0);setRun(false)}};
+$("resetAll").onclick=()=>{if(confirm("Delete the whole squad and line-up?")){localStorage.removeItem(KEY);S=load();sel=null;setRun(false)}};
+const wasRunning=S.running;S.running=false;render();if(wasRunning)setRun(true);
+const UKEY="lineup-users-v1",SKEY="lineup-session-v1",SAVEKEY="lineup-saves-v1";
+const jget=(st,k,d)=>{try{const v=JSON.parse(st.getItem(k));return v==null?d:v}catch(e){return d}};
+const historyEntries=()=>jget(localStorage,HISTORY_KEY,[]);
+function scheduleHistory(){
+  if(!autoHistoryEnabled()){clearTimeout(historyTimer);historyTimer=null;return}
+  const current=JSON.stringify(snapshot());
+  if(!lastHistorySignature){lastHistorySignature=current;return}
+  if(current===lastHistorySignature)return;
+  if(S.running&&Date.now()-lastHistoryAt<60000)return;
+  if(S.running&&historyTimer)return;
+  if(!S.running)clearTimeout(historyTimer);
+  historyTimer=setTimeout(()=>{
+   historyTimer=null;
+   if(!autoHistoryEnabled())return;
+   const state=snapshot(),signature=JSON.stringify(state);
+   if(signature===lastHistorySignature)return;
+   const id=crypto.randomUUID?crypto.randomUUID():String(Date.now()+Math.random());
+   localStorage.setItem(HISTORY_KEY,JSON.stringify([{id,ts:Date.now(),state},...historyEntries()].slice(0,50)));
+   lastHistorySignature=signature;lastHistoryAt=Date.now();renderHistory();
+  },1500)}
+const users=()=>jget(localStorage,UKEY,[]);
+const hex=b=>[...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,"0")).join("");
+async function hashPw(pw,salt){
+  if(!(window.crypto&&crypto.subtle))throw new Error("Secure context (https or localhost) required for password hashing");
+  const k=await crypto.subtle.importKey("raw",new TextEncoder().encode(pw),"PBKDF2",false,["deriveBits"]);
+  return hex(await crypto.subtle.deriveBits({name:"PBKDF2",hash:"SHA-256",salt:new TextEncoder().encode(salt),iterations:150000},k,256))}
+async function makeUser(name,pw,admin){
+  const salt=hex(crypto.getRandomValues(new Uint8Array(16)));
+  return{name,salt,hash:await hashPw(pw,salt),admin:!!admin}}
+function session(){
+  const s=jget(sessionStorage,SKEY,null)||jget(localStorage,SKEY,null);
+  if(!s||(s.exp&&s.exp<Date.now()))return null;
+  const u=users().find(x=>x.name===s.user);return u?{user:u.name,admin:u.admin}:null}
+function startSession(u,remember){
+  sessionStorage.removeItem(SKEY);localStorage.removeItem(SKEY);
+  if(remember)localStorage.setItem(SKEY,JSON.stringify({user:u.name,exp:Date.now()+30*864e5}));
+  else sessionStorage.setItem(SKEY,JSON.stringify({user:u.name}))}
+function showApp(){
+  const s=session();
+  document.body.classList.toggle("locked",!s);
+  $("login").classList.toggle("show",!s);
+  if(!s){const first=users().length===0;
+   $("loginTitle").textContent=first?"Create administrator account":"Sign in";
+   $("loginHint").textContent=first?"First run: choose the admin username and password (min 8 characters).":"";
+   $("loginGo").textContent=first?"Create admin":"Sign in";
+   $("rememberRow").hidden=first;$("forgotBtn").hidden=first;$("lPass").minLength=first?8:0;
+   $("lPass").autocomplete=first?"new-password":"current-password";return}
+  $("adminBtn").hidden=!s.admin}
+$("forgotBtn").onclick=()=>{$("loginErr").textContent="Ask your team administrator to reset your password. Passwords cannot be recovered by email because accounts are stored only in this browser."};
+$("loginForm").onsubmit=async e=>{e.preventDefault();$("loginErr").textContent="";
+  const name=$("lUser").value.trim(),pw=$("lPass").value;
+  try{
+   const list=users();
+   if(list.length===0){
+    if(pw.length<8){$("loginErr").textContent="Password must be at least 8 characters";return}
+    const u=await makeUser(name,pw,true);localStorage.setItem(UKEY,JSON.stringify([u]));startSession(u,false);
+   }else{
+    const u=list.find(x=>x.name.toLowerCase()===name.toLowerCase());
+    const h=u&&await hashPw(pw,u.salt);
+    if(!u||h!==u.hash){$("loginErr").textContent="Invalid username or password";return}
+    startSession(u,$("lRemember").checked)}
+   $("lPass").value="";showApp();
+  }catch(err){$("loginErr").textContent=err.message}};
+$("logoutBtn").onclick=()=>{sessionStorage.removeItem(SKEY);localStorage.removeItem(SKEY);setRun(false);showApp()};
+document.querySelectorAll("[data-close]").forEach(b=>b.onclick=()=>$(b.dataset.close).classList.remove("show"));
+function renderUsers(){
+  const me=session();
+  $("userList").innerHTML=users().map(u=>`<li><span class="grow">${esc(u.name)}${u.admin?" (admin)":""}</span>${me&&u.name===me.user?"":`<button class="danger" data-rmuser="${esc(u.name)}">✕</button>`}</li>`).join("");
+  $("resetUser").innerHTML=users().map(u=>`<option value="${esc(u.name)}">${esc(u.name)}</option>`).join("");
+  document.querySelectorAll("[data-rmuser]").forEach(b=>b.onclick=()=>{
+   if(!confirm("Delete user "+b.dataset.rmuser+"?"))return;
+   localStorage.setItem(UKEY,JSON.stringify(users().filter(u=>u.name!==b.dataset.rmuser)));renderUsers()})}
+$("passwordResetForm").onsubmit=async e=>{e.preventDefault();$("resetErr").textContent="";
+  const me=session(),name=$("resetUser").value,pw=$("resetPass").value;
+  if(!me||!me.admin)return;
+  if(pw.length<8){$("resetErr").textContent="Password must be at least 8 characters";return}
+  try{const list=users(),old=list.find(u=>u.name===name);if(!old)return;
+   const replacement=await makeUser(old.name,pw,old.admin);
+   localStorage.setItem(UKEY,JSON.stringify(list.map(u=>u.name===name?replacement:u)));
+   $("passwordResetForm").reset();renderUsers();$("resetErr").textContent="Password reset."}
+  catch(err){$("resetErr").textContent=err.message}};
+$("adminBtn").onclick=()=>{const s=session();if(!s||!s.admin)return;$("adminErr").textContent="";renderUsers();$("admin").classList.add("show")};
+$("userForm").onsubmit=async e=>{e.preventDefault();$("adminErr").textContent="";
+  const s=session();if(!s||!s.admin)return;
+  const name=$("nUser").value.trim(),pw=$("nPass").value;
+  if(pw.length<8){$("adminErr").textContent="Password must be at least 8 characters";return}
+  if(users().some(u=>u.name.toLowerCase()===name.toLowerCase())){$("adminErr").textContent="Username already exists";return}
+  try{const u=await makeUser(name,pw,$("nAdmin").checked);
+   localStorage.setItem(UKEY,JSON.stringify([...users(),u]));
+   $("userForm").reset();renderUsers()}catch(err){$("adminErr").textContent=err.message}};
+const saves=()=>jget(localStorage,SAVEKEY,[]);
+function snapshot(){return JSON.parse(JSON.stringify({...S,running:false}))}
+function renderHistory(){
+  const list=historyEntries();
+  $("historyList").innerHTML=list.map(x=>`<li><span class="grow">${new Date(x.ts).toLocaleString()}<br><small class="mins">${esc(x.state.team||"Team line-up")} · ${x.state.size}-a-side ${esc(x.state.formation)}</small></span><button class="sec" data-history-load="${x.id}">Load</button><button class="danger" data-history-del="${x.id}">✕</button></li>`).join("");
+  document.querySelectorAll("[data-history-load]").forEach(b=>b.onclick=()=>{const x=historyEntries().find(y=>y.id===b.dataset.historyLoad);
+   if(x&&confirm("Restore the line-up from "+new Date(x.ts).toLocaleString()+"?")){S=JSON.parse(JSON.stringify(x.state));S.running=false;sel=null;setRun(false);$("saves").classList.remove("show")}});
+  document.querySelectorAll("[data-history-del]").forEach(b=>b.onclick=()=>{localStorage.setItem(HISTORY_KEY,JSON.stringify(historyEntries().filter(x=>x.id!==b.dataset.historyDel)));renderHistory()})}
+function renderSaves(){
+  const list=saves(),groups={};
+  list.forEach(x=>(groups[x.folder||""]=groups[x.folder||""]||[]).push(x));
+  $("folders").innerHTML=[...new Set(list.map(x=>x.folder).filter(Boolean))].map(f=>`<option value="${esc(f)}">`).join("");
+  $("saveList").innerHTML=Object.keys(groups).sort().map(f=>`${f?`<div class="grp">📁 ${esc(f)}</div>`:""}<ul>`+groups[f].map(x=>`<li><span class="grow">${esc(x.name)}<br><small class="mins">${new Date(x.ts).toLocaleString()}</small></span><button class="sec" data-load="${x.id}">Load</button><button class="sec" data-pdf="${x.id}">PDF</button><button class="danger" data-delsave="${x.id}">✕</button></li>`).join("")+`</ul>`).join("");
+  const find=id=>saves().find(x=>x.id===id);
+  document.querySelectorAll("[data-load]").forEach(b=>b.onclick=()=>{const x=find(b.dataset.load);
+   if(x&&confirm("Replace the current line-up with \""+x.name+"\"?")){S=JSON.parse(JSON.stringify(x.state));S.running=false;sel=null;setRun(false);$("saves").classList.remove("show")}});
+  document.querySelectorAll("[data-pdf]").forEach(b=>b.onclick=()=>{const x=find(b.dataset.pdf);if(x)exportPDF(x.state,x.name,x.ts)});
+  document.querySelectorAll("[data-delsave]").forEach(b=>b.onclick=()=>{
+   if(confirm("Delete this saved line-up?")){localStorage.setItem(SAVEKEY,JSON.stringify(saves().filter(x=>x.id!==b.dataset.delsave)));renderSaves()}})}
+$("saveBtn").onclick=()=>{$("autoSaveHistory").checked=autoHistoryEnabled();renderSaves();renderHistory();$("saves").classList.add("show")};
+$("autoSaveHistory").onchange=e=>{localStorage.setItem(AUTO_HISTORY_KEY,String(e.target.checked));clearTimeout(historyTimer);historyTimer=null;lastHistorySignature=JSON.stringify(snapshot())};
+$("saveForm").onsubmit=e=>{e.preventDefault();
+  const id=(crypto.randomUUID?crypto.randomUUID():String(Date.now()+Math.random()));
+  localStorage.setItem(SAVEKEY,JSON.stringify([{id,name:$("sName").value.trim(),folder:$("sFolder").value.trim(),ts:Date.now(),state:snapshot()},...saves()]));
+  $("sName").value="";renderSaves()};
+$("team").oninput=e=>{S.team=e.target.value;save()};
+function buildPDF(pages){
+  const clean=t=>String(t).replace(/[–—]/g,"-").replace(/[‘’]/g,"'").replace(/[“”]/g,'"').replace(/[^\x20-\x7e\xa0-\xff]/g,"?").replace(/[\\()]/g,"\\$&");
+  const objs=[];const add=o=>objs.push(o)-1;
+  add("<< /Type /Catalog /Pages 2 0 R >>");add("");
+  add("<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>");
+  add("<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>");
+  const kids=[];
+  pages.forEach(lines=>{
+   let y=800,c="";
+   lines.forEach(l=>{const sz=l.size||10;y-=sz+4;
+    c+=`BT /${l.bold?"F2":"F1"} ${sz} Tf 50 ${y} Td (${clean(l.text)}) Tj ET\n`});
+   const ci=add(`<< /Length ${c.length} >>\nstream\n${c}endstream`);
+   kids.push(add(`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 3 0 R /F2 4 0 R >> >> /Contents ${ci+1} 0 R >>`))});
+  objs[1]=`<< /Type /Pages /Count ${kids.length} /Kids [${kids.map(k=>(k+1)+" 0 R").join(" ")}] >>`;
+  let out="%PDF-1.4\n";const off=[];
+  objs.forEach((o,i)=>{off.push(out.length);out+=`${i+1} 0 obj\n${o}\nendobj\n`});
+  const x=out.length;
+  out+=`xref\n0 ${objs.length+1}\n0000000000 65535 f \n`+off.map(o=>String(o).padStart(10,"0")+" 00000 n \n").join("")+`trailer\n<< /Size ${objs.length+1} /Root 1 0 R >>\nstartxref\n${x}\n%%EOF`;
+  const u=new Uint8Array(out.length);for(let i=0;i<out.length;i++)u[i]=out.charCodeAt(i)&255;
+  return new Blob([u],{type:"application/pdf"})}
+function pdfLines(st,title,ts){
+  const L=[],h=t=>L.push({text:"",size:6},{text:t,bold:true,size:13}),t=(x,o)=>L.push({text:x,...o});
+  const pl=id=>st.players.find(p=>p.id===id),rowsDef=FORMATIONS[st.size][st.formation];
+  t(title||"Team line-up",{bold:true,size:18});
+  t("Team: "+(st.team||"-"));
+  t("Date: "+new Date(ts||Date.now()).toLocaleString());
+  t(`Format: ${st.size}-a-side   Formation: ${st.formation}`);
+  t(`Match clock: ${mmss(st.seconds)} (${st.running?"running":"stopped"})`);
+  h("Starting line-up");
+  let i=0;
+  rowsDef.forEach((c,r)=>{const a=[];for(let j=0;j<c;j++){const p=pl(st.slots[i++]);a.push(p?p.name:"(empty)")}
+   t((r===0?"GK":"Line "+r)+": "+a.join(", "))});
+  const bench=st.players.filter(p=>p.avail!==false&&!st.slots.includes(p.id));
+  h("Substitutes");t(bench.length?bench.map(p=>p.name).join(", "):"None");
+  const unav=st.players.filter(p=>p.avail===false);
+  h("Squad");t(`Total players: ${st.players.length}   Available: ${st.players.length-unav.length}   Unavailable: ${unav.length}`);
+  if(unav.length)t("Unavailable: "+unav.map(p=>p.name).join(", "));
+  h("Playing time");
+  st.players.slice().sort((a,b)=>(b.secs||0)-(a.secs||0)).forEach(p=>t(`${p.name}: ${mmss(p.secs||0)}${st.slots.includes(p.id)?"  (on pitch)":""}`));
+  if(!st.players.length)t("No players");
+  h("Substitution log");
+  if(!st.log.length)t("No substitutions");
+  st.log.slice().reverse().forEach(l=>t(l));
+  return L}
+function exportPDF(st,title,ts){
+  const L=pdfLines(st,title,ts),pages=[];
+  for(let i=0;i<L.length;i+=50)pages.push(L.slice(i,i+50));
+  const blob=buildPDF(pages),a=document.createElement("a");
+  a.href=URL.createObjectURL(blob);
+  a.download=((title||st.team||"lineup").replace(/[^\w-]+/g,"_")||"lineup")+".pdf";
+  document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),1000)}
+$("pdfBtn").onclick=()=>exportPDF(S,S.team||"Team line-up");
+showApp();
+</script>
+</body>
+</html>
