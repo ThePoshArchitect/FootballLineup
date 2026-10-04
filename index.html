@@ -78,6 +78,12 @@ header input{max-width:160px}
 <p class="hint">Minutes played are tracked for on-pitch players while the clock runs.</p>
 <h2>Bench / substitutes</h2>
 <ul id="bench"></ul>
+<h2>Playing time report</h2>
+<label class="hint">Match length (mins) <input id="matchMins" class="on" type="number" min="1" max="200"></label>
+<ul id="report"></ul>
+<h2>Substitution plan</h2>
+<p class="hint">Automatic rotation so every available player gets equal time on the pitch (goalkeeper not treated specially).</p>
+<ul id="plan"></ul>
 <h2>Substitution log</h2>
 <div class="log"><ul id="log"></ul></div>
 </section>
@@ -158,7 +164,7 @@ function swap(a,b){ // a: slot index; b: {slot}|{player}
   if(b.slot!==undefined){const t=S.slots[b.slot];S.slots[b.slot]=old;S.slots[a]=t;}
   else{S.slots[a]=b.player;
    const on=P(b.player),off=P(old);
-   S.log.unshift(`${mmss(S.seconds)} – ${on.name} on${off?`, ${off.name} off":""}`);}
+   S.log.unshift(`${mmss(S.seconds)} – ${on.name} on${off?`, ${off.name} off`:""}`);}
 }
 function render(){
   fixSlots();
@@ -169,7 +175,7 @@ function render(){
   out.reverse().forEach(r=>{const d=document.createElement("div");d.className="row";
    r.forEach(idx=>{const p=P(S.slots[idx]);const b=document.createElement("div");
     b.dataset.slot=idx;b.className="slot"+(p?"":" empty")+(sel===idx?" sel":"");
-    b.innerHTML=p?`${esc(p.name)}${posLabel(p)?`<small>(${esc(posLabel(p))})</small>":""}<small>${mmss(p.secs||0)}</small>`:(idx===0?"GK":"Empty");
+    b.innerHTML=p?`${esc(p.name)}${posLabel(p)?`<small>(${esc(posLabel(p))})</small>`:""}<small>${mmss(p.secs||0)}</small>`:(idx===0?"GK":"Empty");
     b.onclick=()=>{if(!dragged)pick(idx)};d.appendChild(b)});
    pitch.appendChild(d)});
   $("bench").innerHTML=bench().map(p=>`<li class="bench${p.on!=null&&S.seconds>=p.on*60?" due":""}" data-id="${p.id}"><span class="grow">${esc(p.name)}${posLabel(p)?` <small>(${esc(posLabel(p))})</small>`:""}</span><input class="on" type="number" min="0" max="999" data-on="${p.id}" value="${p.on??""}" placeholder="On"></li>`).join("");
@@ -187,12 +193,32 @@ function render(){
   document.querySelectorAll("[data-wdone]").forEach(c=>c.onchange=()=>{S.warmup[+c.dataset.wdone].done=c.checked;render()});
   document.querySelectorAll("[data-wdel]").forEach(b=>b.onclick=()=>{S.warmup.splice(+b.dataset.wdel,1);render()});
   document.querySelectorAll("[data-wup]").forEach(b=>b.onclick=()=>{const i=+b.dataset.wup;if(i>0){[S.warmup[i-1],S.warmup[i]]=[S.warmup[i],S.warmup[i-1]];render()}});
+  renderTimes();
   $("log").innerHTML=S.log.map(l=>`<li>${esc(l)}</li>`).join("");
   $("team").value=S.team||"";
   $("clock").textContent=mmss(S.seconds);
   $("startStop").textContent=S.running?"Pause":"Start";
   save();
 }
+function fmtSecs(x){return mmss(Math.round(x))}
+function subPlan(){
+  const A=S.players.filter(p=>p.avail!==false),N=count(),L=(S.matchMins||0)*60;
+  if(!L||A.length<=N||N<1)return null;
+  const B=A.length-N,seg=L/A.length,steps=[];
+  const benchAt=k=>new Set(Array.from({length:B},(_,j)=>(k*B+j)%A.length));
+  for(let k=1;k<A.length;k++){
+   const prev=benchAt(k-1),cur=benchAt(k);
+   const on=[...prev].filter(i=>!cur.has(i)),off=[...cur].filter(i=>!prev.has(i));
+   steps.push({t:Math.round(k*seg),on:on.map(i=>A[i].name),off:off.map(i=>A[i].name)})}
+  return{steps,each:L*N/A.length,start:[...benchAt(0)].map(i=>A[i].name)}}
+function renderTimes(){
+  $("matchMins").value=S.matchMins||"";
+  const A=S.players.filter(p=>p.avail!==false),L=(S.matchMins||0)*60;
+  $("report").innerHTML=A.length?A.map(p=>{const s=p.secs||0;
+   return`<li><span class="grow">${esc(p.name)}</span><span class="mins">${fmtSecs(s)}${L?` (${Math.round(100*s/L)}% of match)`:""}${S.slots.includes(p.id)?" · on pitch":""}</span></li>`}).join(""):"<li class='hint'>No players.</li>";
+  const pl=subPlan();
+  $("plan").innerHTML=pl?`<li class="hint">Start on bench: ${pl.start.map(esc).join(", ")}. Target ≈ ${fmtSecs(pl.each)} each.</li>`+pl.steps.map(s=>`<li${S.seconds>=s.t&&S.seconds<s.t+60?' class="due"':""}><span class="grow">${mmss(s.t)} – ${s.on.map(esc).join(", ")} on, ${s.off.map(esc).join(", ")} off</span></li>`).join(""):`<li class="hint">${L?"Needs more available players than on-pitch places.":"Enter the match length to generate a plan."}</li>`}
+$("matchMins").onchange=e=>{S.matchMins=Math.max(0,+e.target.value||0);render()};
 function esc(s){return s.replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]))}
 function pick(idx){
   if(sel===null){sel=idx}
@@ -244,8 +270,7 @@ function setRun(r){S.running=r;clearInterval(timer);if(r){lastTick=Date.now();ti
 $("size").onchange=e=>{S.size=+e.target.value;S.formation=Object.keys(FORMATIONS[S.size])[0];sel=null;render()};
 $("formation").onchange=e=>{S.formation=e.target.value;sel=null;render()};
 function addPlayers(toBench){
-  const names=$("name").value.split(/[,
-;]/).map(x=>x.trim()).filter(Boolean);if(!names.length)return;
+  const names=$("name").value.split(/[,\n;]/).map(x=>x.trim()).filter(Boolean);if(!names.length)return;
   const positions=[...document.querySelectorAll("[data-new-pos]:checked")].map(x=>x.value);
   names.forEach(n=>{
    const id=(crypto.randomUUID?crypto.randomUUID():String(Date.now()+Math.random()));
