@@ -40,7 +40,12 @@ input.on{width:4.5rem}
 .log{max-height:180px;overflow:auto;font-size:.85rem}
 .hint{color:#666;font-size:.85rem}
 .ctl{display:flex;gap:.4rem;flex-wrap:wrap;align-items:center}
-body.locked header,body.locked main{display:none}
+body.locked header,body.locked main,body.locked nav.tabs{display:none}
+nav.tabs{display:flex;gap:.3rem;padding:.4rem 1rem 0;max-width:1100px;margin:auto}
+nav.tabs button{flex:1;background:#e3e6e9;color:#222;border-radius:8px 8px 0 0;padding:.6rem}
+nav.tabs button.active{background:#0b6e3a;color:#fff}
+main[data-tab=match] section.squad-tab,main[data-tab=squad] section.match-tab{display:none}
+@media(max-width:600px){header{padding:.5rem}main{padding:.5rem;gap:.5rem}nav.tabs{padding:.3rem .5rem 0}section{padding:.7rem}.pitch{min-height:300px}}
 .overlay{position:fixed;inset:0;background:#f3f5f7;display:none;align-items:center;justify-content:center;padding:1rem;z-index:10;overflow:auto}
 .overlay.show{display:flex}
 .overlay.modal{background:#0007;align-items:flex-start}
@@ -65,13 +70,14 @@ header input{max-width:160px}
 <span class="ctl"><button class="sec" id="saveBtn">💾 Save / Load</button><button class="sec" id="pdfBtn">📄 Export PDF</button>
 <button class="sec" id="adminBtn" hidden>👤 Admin</button><button class="sec" id="logoutBtn">Log out</button></span>
 </header>
-<main>
-<section>
+<nav class="tabs"><button id="tabMatch" class="active" type="button">⚽ Pitch &amp; Subs</button><button id="tabSquad" type="button">👥 Squad</button></nav>
+<main data-tab="match">
+<section class="match-tab">
 <h2>Starting line-up</h2>
 <div class="pitch" id="pitch"></div>
 <p class="hint" id="hint">Drag players to move them (onto another position to swap, onto the bench to substitute off), or tap a position then another position/bench player.</p>
 </section>
-<section>
+<section class="match-tab">
 <h2>Match clock</h2>
 <div class="ctl"><span class="clock" id="clock">00:00</span>
 <button id="startStop">Start</button><button class="sec" id="resetClock">Reset</button></div>
@@ -87,7 +93,7 @@ header input{max-width:160px}
 <h2>Substitution log</h2>
 <div class="log"><ul id="log"></ul></div>
 </section>
-<section>
+<section class="squad-tab">
 <h2>Squad</h2>
 <form class="add" id="addForm"><input id="name" placeholder="Player name(s), comma separated" required maxlength="200"><span class="positions" title="Preferred positions"><label class="pos-choice"><input type="checkbox" data-new-pos value="GK">GK</label><label class="pos-choice"><input type="checkbox" data-new-pos value="D">D</label><label class="pos-choice"><input type="checkbox" data-new-pos value="M">M</label><label class="pos-choice"><input type="checkbox" data-new-pos value="F">F</label></span><button id="addBench" type="button">Add to bench</button><button>Add</button></form>
 <p class="hint" id="squadTotals"></p>
@@ -134,6 +140,8 @@ header input{max-width:160px}
 <div id="historyList"></div>
 <button class="sec" data-close="saves">Close</button></div></div>
 <script>
+function showTab(t){document.querySelector("main").dataset.tab=t;$("tabMatch").classList.toggle("active",t==="match");$("tabSquad").classList.toggle("active",t==="squad");window.scrollTo(0,0)}
+document.addEventListener("DOMContentLoaded",()=>{$("tabMatch").onclick=()=>showTab("match");$("tabSquad").onclick=()=>showTab("squad")});
 const FORMATIONS={
   5:{"2-2":[1,2,2],"1-2-1":[1,1,2,1],"3-1":[1,3,1]},
   7:{"2-3-1":[1,2,3,1],"3-2-1":[1,3,2,1],"2-2-2":[1,2,2,2]},
