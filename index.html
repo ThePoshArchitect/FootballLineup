@@ -88,7 +88,7 @@ header input{max-width:160px}
 <label class="hint">Match length (mins) <input id="matchMins" class="on" type="number" min="1" max="200"></label>
 <ul id="report"></ul>
 <h2>Substitution plan</h2>
-<p class="hint">Automatic rotation so every available player gets equal time on the pitch (goalkeeper not treated specially).</p>
+<p class="hint">Automatic rotation so every available player gets equal time on the pitch (goalkeeper not treated specially). Players marked “Exclude from sub” in the Squad tab are left out of the rotation.</p>
 <ul id="plan"></ul>
 <h2>Substitution log</h2>
 <div class="log"><ul id="log"></ul></div>
@@ -128,6 +128,7 @@ header input{max-width:160px}
 <button class="sec" data-close="admin">Close</button></div></div>
 <div class="overlay modal" id="saves"><div class="card">
 <h2>Saved line-ups</h2>
+<p class="hint">Mark a saved squad as default (★) to load it every time the app opens.</p>
 <label class="chk"><input type="checkbox" id="autoSaveHistory"> Automatically keep history (last 50 changes)</label>
 <form id="saveForm" class="card" style="box-shadow:none;padding:0">
 <label>Name<input id="sName" required maxlength="60"></label>
@@ -152,7 +153,11 @@ const KEY="lineup-manager-v1";
 const HISTORY_KEY="lineup-history-v1",AUTO_HISTORY_KEY="lineup-auto-history-v1";
 let historyTimer=null,lastHistoryAt=0,lastHistorySignature="";
 const autoHistoryEnabled=()=>localStorage.getItem(AUTO_HISTORY_KEY)!=="false";
+const DEFAULT_KEY="lineup-default-save-v1";
 let S=load();
+(function applyDefault(){try{const id=localStorage.getItem(DEFAULT_KEY);if(!id)return;
+ const x=(JSON.parse(localStorage.getItem("lineup-saves-v1"))||[]).find(y=>y.id===id);
+ if(x&&x.state&&x.state.players){S=JSON.parse(JSON.stringify(x.state));S.running=false}}catch(e){}})();
 let sel=null,timer=null,lastTick=0;
 function load(){try{const s=JSON.parse(localStorage.getItem(KEY));if(s&&s.players)return s}catch(e){}
  return{team:"",players:[],size:7,formation:"2-3-1",slots:[],log:[],seconds:0,running:false}}
@@ -192,9 +197,10 @@ function render(){
   document.querySelectorAll("input[data-on]").forEach(i=>{i.onpointerdown=e=>e.stopPropagation();i.onchange=()=>{P(i.dataset.on).on=i.value===""?null:Math.max(0,+i.value);save();render()}});
   document.querySelectorAll("#bench li.bench").forEach(li=>li.onclick=e=>{if(e.target.closest("input"))return;if(!dragged)benchPick(li.dataset.id)});
   initDrag();
-  $("squad").innerHTML=S.players.map(p=>`<li${p.avail===false?' style="opacity:.55"':""}><input type="checkbox" data-avail="${p.id}" title="Available"${p.avail===false?"":" checked"}><span class="grow">${esc(p.name)}</span><span class="positions">${["GK","D","M","F"].map(v=>`<label class="pos-choice"><input type="checkbox" data-player-pos="${p.id}" value="${v}"${playerPositions(p).includes(v)?" checked":""}>${v}</label>`).join("")}</span><button class="sec" data-del="${p.id}">✕</button></li>`).join("");
+  $("squad").innerHTML=S.players.map(p=>`<li${p.avail===false?' style="opacity:.55"':""}><input type="checkbox" data-avail="${p.id}" title="Available"${p.avail===false?"":" checked"}><span class="grow">${esc(p.name)}</span><span class="positions">${["GK","D","M","F"].map(v=>`<label class="pos-choice"><input type="checkbox" data-player-pos="${p.id}" value="${v}"${playerPositions(p).includes(v)?" checked":""}>${v}</label>`).join("")}</span><label class="pos-choice" title="Exclude from substitution plan"><input type="checkbox" data-nosub="${p.id}"${p.noSub?" checked":""}>Exclude from sub</label><button class="sec" data-del="${p.id}">✕</button></li>`).join("");
   const av=S.players.filter(p=>p.avail!==false).length;$("squadTotals").textContent=`Total players: ${S.players.length} · Available: ${av} · Unavailable: ${S.players.length-av}`;
   document.querySelectorAll("[data-avail]").forEach(c=>c.onchange=()=>{P(c.dataset.avail).avail=c.checked;sel=null;save();render()});
+  document.querySelectorAll("[data-nosub]").forEach(c=>c.onchange=()=>{P(c.dataset.nosub).noSub=c.checked;save();render()});
   document.querySelectorAll("[data-player-pos]").forEach(c=>c.onchange=()=>{const p=P(c.dataset.playerPos);p.positions=[...document.querySelectorAll(`[data-player-pos="${c.dataset.playerPos}"]:checked`)].map(x=>x.value);save();render()});
   document.querySelectorAll("[data-del]").forEach(b=>b.onclick=()=>{S.players=S.players.filter(p=>p.id!==b.dataset.del);sel=null;save();render()});
   S.warmup=S.warmup||[];
@@ -212,7 +218,8 @@ function render(){
 }
 function fmtSecs(x){return mmss(Math.round(x))}
 function subPlan(){
-  const A=S.players.filter(p=>p.avail!==false),N=count(),L=(S.matchMins||0)*60;
+  const fixed=S.players.filter(p=>p.avail!==false&&p.noSub).length;
+  const A=S.players.filter(p=>p.avail!==false&&!p.noSub),N=count()-fixed,L=(S.matchMins||0)*60;
   if(!L||A.length<=N||N<1)return null;
   const B=A.length-N,seg=L/A.length,steps=[];
   const benchAt=k=>new Set(Array.from({length:B},(_,j)=>(k*B+j)%A.length));
@@ -399,7 +406,7 @@ function normalizeImportedState(st){
    const id=newId();ids.set(p.id,id);
    players.push({id,name:p.name,secs:Number.isFinite(+p.secs)&&+p.secs>=0?+p.secs:0,
     positions:Array.isArray(p.positions)?p.positions.filter(x=>["GK","D","M","F"].includes(x)):p.pos&&["GK","D","M","F"].includes(p.pos)?[p.pos]:[],
-    avail:p.avail!==false,on:Number.isFinite(+p.on)&&p.on!==null?Math.max(0,+p.on):null});
+    avail:p.avail!==false,noSub:!!p.noSub,on:Number.isFinite(+p.on)&&p.on!==null?Math.max(0,+p.on):null});
   }
   if(!Array.isArray(st.slots)||!Array.isArray(st.log)||!Array.isArray(st.warmup||[]))return null;
   const slots=st.slots.map(id=>id==null?null:ids.get(id)||null);
@@ -421,13 +428,15 @@ function renderSaves(){
   const list=saves(),groups={};
   list.forEach(x=>(groups[x.folder||""]=groups[x.folder||""]||[]).push(x));
   $("folders").innerHTML=[...new Set(list.map(x=>x.folder).filter(Boolean))].map(f=>`<option value="${esc(f)}">`).join("");
-  $("saveList").innerHTML=Object.keys(groups).sort().map(f=>`${f?`<div class="grp">📁 ${esc(f)}</div>`:""}<ul>`+groups[f].map(x=>`<li><span class="grow">${esc(x.name)}<br><small class="mins">${new Date(x.ts).toLocaleString()}</small></span><button class="sec" data-load="${x.id}">Load</button><button class="sec" data-pdf="${x.id}">PDF</button><button class="danger" data-delsave="${x.id}">✕</button></li>`).join("")+`</ul>`).join("");
+  $("saveList").innerHTML=Object.keys(groups).sort().map(f=>`${f?`<div class="grp">📁 ${esc(f)}</div>`:""}<ul>`+groups[f].map(x=>`<li><span class="grow">${esc(x.name)}<br><small class="mins">${new Date(x.ts).toLocaleString()}</small></span><button class="${localStorage.getItem(DEFAULT_KEY)===x.id?"":"sec"}" data-default="${x.id}">${localStorage.getItem(DEFAULT_KEY)===x.id?"★ Default":"☆ Set default"}</button><button class="sec" data-load="${x.id}">Load</button><button class="sec" data-pdf="${x.id}">PDF</button><button class="danger" data-delsave="${x.id}">✕</button></li>`).join("")+`</ul>`).join("");
   const find=id=>saves().find(x=>x.id===id);
   document.querySelectorAll("[data-load]").forEach(b=>b.onclick=()=>{const x=find(b.dataset.load);
    if(x&&confirm("Replace the current line-up with \""+x.name+"\"?")){S=JSON.parse(JSON.stringify(x.state));S.running=false;sel=null;setRun(false);$("saves").classList.remove("show")}});
+  document.querySelectorAll("[data-default]").forEach(b=>b.onclick=()=>{
+   if(localStorage.getItem(DEFAULT_KEY)===b.dataset.default)localStorage.removeItem(DEFAULT_KEY);else localStorage.setItem(DEFAULT_KEY,b.dataset.default);renderSaves()});
   document.querySelectorAll("[data-pdf]").forEach(b=>b.onclick=()=>{const x=find(b.dataset.pdf);if(x)exportPDF(x.state,x.name,x.ts)});
   document.querySelectorAll("[data-delsave]").forEach(b=>b.onclick=()=>{
-   if(confirm("Delete this saved line-up?")){localStorage.setItem(SAVEKEY,JSON.stringify(saves().filter(x=>x.id!==b.dataset.delsave)));renderSaves()}})}
+   if(confirm("Delete this saved line-up?")){localStorage.setItem(SAVEKEY,JSON.stringify(saves().filter(x=>x.id!==b.dataset.delsave)));if(localStorage.getItem(DEFAULT_KEY)===b.dataset.delsave)localStorage.removeItem(DEFAULT_KEY);renderSaves()}})}
 $("saveBtn").onclick=()=>{$("autoSaveHistory").checked=autoHistoryEnabled();renderSaves();renderHistory();$("saves").classList.add("show")};
 $("autoSaveHistory").onchange=e=>{localStorage.setItem(AUTO_HISTORY_KEY,String(e.target.checked));clearTimeout(historyTimer);historyTimer=null;lastHistorySignature=JSON.stringify(snapshot())};
 $("saveForm").onsubmit=e=>{e.preventDefault();
