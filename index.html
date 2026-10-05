@@ -127,6 +127,8 @@ header input{max-width:160px}
 <label>Name<input id="sName" required maxlength="60"></label>
 <label>Folder (optional)<input id="sFolder" maxlength="40" list="folders"></label><datalist id="folders"></datalist>
 <button>Save current line-up</button></form>
+<div class="ctl"><button class="sec" id="exportJsonBtn" type="button">Export plans (JSON)</button><button class="sec" id="importJsonBtn" type="button">Import plans (JSON)</button><input id="importJsonFile" type="file" accept=".json,application/json" hidden></div>
+<p class="hint" id="planIoStatus" role="status"></p>
 <div id="saveList"></div>
 <h2>Automatic history</h2>
 <div id="historyList"></div>
@@ -378,6 +380,29 @@ $("userForm").onsubmit=async e=>{e.preventDefault();$("adminErr").textContent=""
    $("userForm").reset();renderUsers()}catch(err){$("adminErr").textContent=err.message}};
 const saves=()=>jget(localStorage,SAVEKEY,[]);
 function snapshot(){return JSON.parse(JSON.stringify({...S,running:false}))}
+const newId=()=>crypto.randomUUID?crypto.randomUUID():String(Date.now()+Math.random());
+function normalizeImportedState(st){
+  if(!st||typeof st!=="object"||!Array.isArray(st.players)||st.players.length>100)return null;
+  const size=+st.size,formation=st.formation;
+  if(!FORMATIONS[size]||!FORMATIONS[size][formation])return null;
+  const ids=new Map(),players=[];
+  for(const p of st.players){
+   if(!p||typeof p.id!=="string"||ids.has(p.id)||typeof p.name!=="string"||p.name.length>200)return null;
+   const id=newId();ids.set(p.id,id);
+   players.push({id,name:p.name,secs:Number.isFinite(+p.secs)&&+p.secs>=0?+p.secs:0,
+    positions:Array.isArray(p.positions)?p.positions.filter(x=>["GK","D","M","F"].includes(x)):p.pos&&["GK","D","M","F"].includes(p.pos)?[p.pos]:[],
+    avail:p.avail!==false,on:Number.isFinite(+p.on)&&p.on!==null?Math.max(0,+p.on):null});
+  }
+  if(!Array.isArray(st.slots)||!Array.isArray(st.log)||!Array.isArray(st.warmup||[]))return null;
+  const slots=st.slots.map(id=>id==null?null:ids.get(id)||null);
+  const warmup=(st.warmup||[]).slice(0,100);
+  if(warmup.some(w=>!w||typeof w.name!=="string"||w.name.length>60))return null;
+  return{team:typeof st.team==="string"?st.team.slice(0,40):"",players,size,formation,slots,
+   log:st.log.slice(0,500).filter(x=>typeof x==="string").map(x=>x.slice(0,500)),
+   seconds:Number.isFinite(+st.seconds)&&+st.seconds>=0?+st.seconds:0,running:false,
+   matchMins:Math.min(200,Math.max(0,+st.matchMins||0)),
+   warmup:warmup.map(w=>({name:w.name,mins:Math.min(60,Math.max(0,+w.mins||0)),done:!!w.done}))};
+}
 function renderHistory(){
   const list=historyEntries();
   $("historyList").innerHTML=list.map(x=>`<li><span class="grow">${new Date(x.ts).toLocaleString()}<br><small class="mins">${esc(x.state.team||"Team line-up")} · ${x.state.size}-a-side ${esc(x.state.formation)}</small></span><button class="sec" data-history-load="${x.id}">Load</button><button class="danger" data-history-del="${x.id}">✕</button></li>`).join("");
@@ -398,9 +423,39 @@ function renderSaves(){
 $("saveBtn").onclick=()=>{$("autoSaveHistory").checked=autoHistoryEnabled();renderSaves();renderHistory();$("saves").classList.add("show")};
 $("autoSaveHistory").onchange=e=>{localStorage.setItem(AUTO_HISTORY_KEY,String(e.target.checked));clearTimeout(historyTimer);historyTimer=null;lastHistorySignature=JSON.stringify(snapshot())};
 $("saveForm").onsubmit=e=>{e.preventDefault();
-  const id=(crypto.randomUUID?crypto.randomUUID():String(Date.now()+Math.random()));
+  const id=newId();
   localStorage.setItem(SAVEKEY,JSON.stringify([{id,name:$("sName").value.trim(),folder:$("sFolder").value.trim(),ts:Date.now(),state:snapshot()},...saves()]));
   $("sName").value="";renderSaves()};
+$("exportJsonBtn").onclick=()=>{
+  const plans=saves();
+  if(!plans.length){$("planIoStatus").textContent="Save a line-up before exporting plans.";return}
+  const blob=new Blob([JSON.stringify({format:"football-lineup-plans",version:1,plans},null,2)],{type:"application/json"});
+  const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="football-lineup-plans.json";
+  document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),1000);
+  $("planIoStatus").textContent=`Exported ${plans.length} saved plan${plans.length===1?"":"s"}.`};
+$("importJsonBtn").onclick=()=>{$("importJsonFile").click()};
+$("importJsonFile").onchange=async e=>{
+  const file=e.target.files[0];e.target.value="";if(!file)return;
+  $("planIoStatus").textContent="";
+  try{
+   if(file.size>5*1024*1024)throw new Error("The JSON file is too large.");
+   const data=JSON.parse(await file.text());
+   if(!data||data.format!=="football-lineup-plans"||data.version!==1||!Array.isArray(data.plans)||data.plans.length>500)
+    throw new Error("This is not a supported Football Lineup plans file.");
+   const imported=[];
+   for(const x of data.plans){
+    if(!x||typeof x.name!=="string"||x.name.length>60||typeof x.folder!=="string"||x.folder.length>40||!Number.isFinite(+x.ts))
+     throw new Error("The file contains an invalid saved plan.");
+    const state=normalizeImportedState(x.state);
+    if(!state)throw new Error("The file contains an invalid lineup.");
+    imported.push({id:newId(),name:x.name,folder:x.folder,ts:+x.ts,state});
+   }
+   if(!imported.length)throw new Error("The file contains no saved plans.");
+   localStorage.setItem(SAVEKEY,JSON.stringify([...imported,...saves()]));
+   renderSaves();
+   $("planIoStatus").textContent=`Imported ${imported.length} plan${imported.length===1?"":"s"}. Existing plans were kept.`;
+  }catch(err){$("planIoStatus").textContent=err.message||"Could not import this file."}
+};
 $("team").oninput=e=>{S.team=e.target.value;save()};
 function buildPDF(pages){
   const clean=t=>String(t).replace(/[–—]/g,"-").replace(/[‘’]/g,"'").replace(/[“”]/g,'"').replace(/[^\x20-\x7e\xa0-\xff]/g,"?").replace(/[\\()]/g,"\\$&");
