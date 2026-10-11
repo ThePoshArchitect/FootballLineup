@@ -25,6 +25,7 @@ Screenshots use fictional sample players and team data.
 
 3. Open `http://localhost:8000` in your browser.
 4. On first launch, create an administrator account. The password must be at least eight characters.
+5. A sample team and seven-player line-up are provided to help you get started; replace the sample players with your squad.
 
 ## Using the app
 
@@ -32,7 +33,7 @@ Screenshots use fictional sample players and team data.
 - **Arrange a line-up:** Choose a team format and formation. Drag players between pitch positions or the bench, or select a player and then a destination to swap them.
 - **Manage a match:** Start the match clock to track playing time. Enter the match length to see a playing-time report and an automatic, equal-time substitution plan. Set an individual bench player's planned entry time if needed.
 - **Plan a warm-up:** Add timed exercises, mark them complete, and reorder the routine.
-- **Save and share:** Save line-ups in the browser, optionally set a default line-up, and import or export saved plans as JSON. Export the current or a saved line-up as a PDF.
+- **Save and share:** Save line-ups in the browser, optionally set a default line-up, and import or export saved plans as JSON. Export the current or a saved line-up as a PDF with a pitch diagram of player positions.
 - **Manage accounts:** An administrator can create users, reset passwords, and remove accounts from the Admin panel.
 
 ## Data and privacy

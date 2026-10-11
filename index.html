@@ -159,8 +159,17 @@ let S=load();
  const x=(JSON.parse(localStorage.getItem("lineup-saves-v1"))||[]).find(y=>y.id===id);
  if(x&&x.state&&x.state.players){S=JSON.parse(JSON.stringify(x.state));S.running=false}}catch(e){}})();
 let sel=null,timer=null,lastTick=0;
-function load(){try{const s=JSON.parse(localStorage.getItem(KEY));if(s&&s.players)return s}catch(e){}
- return{team:"",players:[],size:7,formation:"2-3-1",slots:[],log:[],seconds:0,running:false}}
+function emptyState(){return{team:"",players:[],size:7,formation:"2-3-1",slots:[],log:[],seconds:0,running:false}}
+function defaultState(){
+ const players=[
+  ["default-1","Player 1",["GK"]],["default-2","Player 2",["D"]],["default-3","Player 3",["D"]],
+  ["default-4","Player 4",["M"]],["default-5","Player 5",["M"]],["default-6","Player 6",["M"]],
+  ["default-7","Player 7",["F"]],["default-8","Player 8",["D","M"]],
+  ["default-9","Player 9",["M","F"]],["default-10","Player 10",["F"]]
+ ].map(([id,name,positions])=>({id,name,positions,secs:0}));
+ return{...emptyState(),team:"Sample FC",players,slots:players.slice(0,7).map(p=>p.id),warmup:[]}}
+function load(useDefault=true){try{const s=JSON.parse(localStorage.getItem(KEY));if(s&&s.players)return s}catch(e){}
+ return useDefault?defaultState():emptyState()}
 function save(){localStorage.setItem(KEY,JSON.stringify(S));scheduleHistory()}
 const $=id=>document.getElementById(id);
 const rows=()=>FORMATIONS[S.size][S.formation];
@@ -301,7 +310,7 @@ $("wuForm").onsubmit=e=>{e.preventDefault();const n=$("wuName").value.trim();if(
   $("wuName").value="";$("wuMins").value="";render()};
 $("startStop").onclick=()=>setRun(!S.running);
 $("resetClock").onclick=()=>{if(confirm("Reset clock and minutes played?")){S.seconds=0;S.log=[];S.players.forEach(p=>p.secs=0);setRun(false)}};
-$("resetAll").onclick=()=>{if(confirm("Delete the whole squad and line-up?")){localStorage.removeItem(KEY);S=load();sel=null;setRun(false)}};
+$("resetAll").onclick=()=>{if(confirm("Delete the whole squad and line-up?")){localStorage.removeItem(KEY);S=load(false);sel=null;setRun(false)}};
 const wasRunning=S.running;S.running=false;render();if(wasRunning)setRun(true);
 const UKEY="lineup-users-v1",SKEY="lineup-session-v1",SAVEKEY="lineup-saves-v1";
 const jget=(st,k,d)=>{try{const v=JSON.parse(st.getItem(k));return v==null?d:v}catch(e){return d}};
@@ -475,7 +484,7 @@ $("importJsonFile").onchange=async e=>{
 };
 $("team").oninput=e=>{S.team=e.target.value;save()};
 function buildPDF(pages){
-  const clean=t=>String(t).replace(/[–—]/g,"-").replace(/[‘’]/g,"'").replace(/[“”]/g,'"').replace(/[^\x20-\x7e\xa0-\xff]/g,"?").replace(/[\\()]/g,"\\$&");
+  const clean=pdfSafeText;
   const objs=[];const add=o=>objs.push(o)-1;
   add("<< /Type /Catalog /Pages 2 0 R >>");add("");
   add("<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>");
@@ -484,6 +493,7 @@ function buildPDF(pages){
   pages.forEach(lines=>{
    let y=800,c="";
    lines.forEach(l=>{const sz=l.size||10;y-=sz+4;
+    if(l.commands){c+=l.commands;return}
     c+=`BT /${l.bold?"F2":"F1"} ${sz} Tf 50 ${y} Td (${clean(l.text)}) Tj ET\n`});
    const ci=add(`<< /Length ${c.length} >>\nstream\n${c}endstream`);
    kids.push(add(`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 3 0 R /F2 4 0 R >> >> /Contents ${ci+1} 0 R >>`))});
@@ -494,6 +504,27 @@ function buildPDF(pages){
   out+=`xref\n0 ${objs.length+1}\n0000000000 65535 f \n`+off.map(o=>String(o).padStart(10,"0")+" 00000 n \n").join("")+`trailer\n<< /Size ${objs.length+1} /Root 1 0 R >>\nstartxref\n${x}\n%%EOF`;
   const u=new Uint8Array(out.length);for(let i=0;i<out.length;i++)u[i]=out.charCodeAt(i)&255;
   return new Blob([u],{type:"application/pdf"})}
+function pdfSafeText(t){return String(t).replace(/[–—]/g,"-").replace(/[‘’]/g,"'").replace(/[“”]/g,'"').replace(/[^\x20-\x7e\xa0-\xff]/g,"?").replace(/[\\()]/g,"\\$&")}
+function pitchDiagram(st){
+  const x=50,y=480,w=495,h=205,rowsDef=FORMATIONS[st.size][st.formation],starts=[];
+  let index=0;rowsDef.forEach(c=>{starts.push(index);index+=c});
+  let c="q\n0.15 0.50 0.28 rg 50 480 495 205 re f\n1 1 1 RG 2 w 50 480 495 205 re S\n";
+  c+=`${x} ${y+h/2} m ${x+w} ${y+h/2} l S\n`;
+  const r=31,k=.55228475*r,cx=x+w/2,cy=y+h/2;
+  c+=`${cx+r} ${cy} m ${cx+r} ${cy+k} ${cx+k} ${cy+r} ${cx} ${cy+r} c ${cx-k} ${cy+r} ${cx-r} ${cy+k} ${cx-r} ${cy} c ${cx-r} ${cy-k} ${cx-k} ${cy-r} ${cx} ${cy-r} c ${cx+k} ${cy-r} ${cx+r} ${cy-k} ${cx+r} ${cy} c S\n`;
+  c+=`${x} ${y+h*.32} ${w*.16} ${h*.36} re S\n${x+w*.84} ${y+h*.32} ${w*.16} ${h*.36} re S\n`;
+  rowsDef.slice().reverse().forEach((count,displayRow)=>{
+   const sourceRow=rowsDef.length-1-displayRow,cy=y+h*(.12+.76*(rowsDef.length===1?.5:displayRow/(rowsDef.length-1)));
+   for(let j=0;j<count;j++){
+    const px=x+w*(j+1)/(count+1),p=st.players.find(a=>a.id===st.slots[starts[sourceRow]+j]);
+    const label=pdfSafeText(p?p.name.slice(0,16):"Empty"),labelWidth=label.length*3.3;
+    const r=11,k=.55228475*r;
+    c+=`1 1 1 rg 0.05 0.30 0.15 RG 1 w ${px+r} ${cy} m ${px+r} ${cy+k} ${px+k} ${cy+r} ${px} ${cy+r} c ${px-k} ${cy+r} ${px-r} ${cy+k} ${px-r} ${cy} c ${px-r} ${cy-k} ${px-k} ${cy-r} ${px} ${cy-r} c ${px+k} ${cy-r} ${px+r} ${cy-k} ${px+r} ${cy} c B\n`;
+    c+=`BT /F2 8 Tf ${px-2.5} ${cy-3} Td (${starts[sourceRow]+j+1}) Tj ET\n`;
+    c+=`BT /F1 7 Tf ${px-labelWidth/2} ${cy-22} Td (${label}) Tj ET\n`;
+   }
+  });
+  return c+"Q\n"}
 function pdfLines(st,title,ts){
   const L=[],h=t=>L.push({text:"",size:6},{text:t,bold:true,size:13}),t=(x,o)=>L.push({text:x,...o});
   const pl=id=>st.players.find(p=>p.id===id),rowsDef=FORMATIONS[st.size][st.formation];
@@ -502,6 +533,7 @@ function pdfLines(st,title,ts){
   t("Date: "+new Date(ts||Date.now()).toLocaleString());
   t(`Format: ${st.size}-a-side   Formation: ${st.formation}`);
   t(`Match clock: ${mmss(st.seconds)} (${st.running?"running":"stopped"})`);
+  L.push({size:250,commands:pitchDiagram(st)});
   h("Starting line-up");
   let i=0;
   rowsDef.forEach((c,r)=>{const a=[];for(let j=0;j<c;j++){const p=pl(st.slots[i++]);a.push(p?p.name:"(empty)")}
@@ -519,8 +551,11 @@ function pdfLines(st,title,ts){
   st.log.slice().reverse().forEach(l=>t(l));
   return L}
 function exportPDF(st,title,ts){
-  const L=pdfLines(st,title,ts),pages=[];
-  for(let i=0;i<L.length;i+=50)pages.push(L.slice(i,i+50));
+  const L=pdfLines(st,title,ts),pages=[];let page=[],height=0;
+  L.forEach(line=>{const lineHeight=(line.size||10)+4;
+   if(page.length&&height+lineHeight>750){pages.push(page);page=[];height=0}
+   page.push(line);height+=lineHeight});
+  if(page.length)pages.push(page);
   const blob=buildPDF(pages),a=document.createElement("a");
   a.href=URL.createObjectURL(blob);
   a.download=((title||st.team||"lineup").replace(/[^\w-]+/g,"_")||"lineup")+".pdf";
