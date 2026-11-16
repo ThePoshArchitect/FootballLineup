@@ -79,7 +79,7 @@ table.stats{width:100%;border-collapse:collapse;font-variant-numeric:tabular-num
 table.stats th,table.stats td{padding:.5rem .3rem;text-align:right;border-bottom:1px solid var(--sep);white-space:nowrap}
 table.stats th:first-child,table.stats td:first-child{text-align:left}
 table.stats th{color:var(--ink2);font-weight:600;font-size:.8rem}
-@media(max-width:600px){header{padding-left:.8rem;padding-right:.8rem}main{padding:.4rem .6rem 1rem;gap:.6rem}section{padding:.8rem;border-radius:18px}.pitch{min-height:400px}}
+@media(max-width:600px){#squad li{flex-wrap:wrap}#squad li .grow{flex:1 1 60%;font-weight:600}#squad li .positions{flex:1 1 100%;flex-wrap:nowrap;gap:.7rem;padding-left:1.6rem}#squad li .del,#squad li button{margin-left:auto}header{padding-left:.8rem;padding-right:.8rem}main{padding:.4rem .6rem 1rem;gap:.6rem}section{padding:.8rem;border-radius:18px}.pitch{min-height:400px}}
 @media(prefers-reduced-motion:reduce){button{transition:none}}
 .overlay{position:fixed;inset:0;background:var(--bg);display:none;align-items:center;justify-content:center;padding:1rem;z-index:30;overflow:auto}
 .overlay.show{display:flex}
@@ -149,8 +149,9 @@ button.act.goal{background:var(--accent);color:var(--accent-ink)}
 #toast.act{pointer-events:auto}
 input[type=color]{padding:2px;width:48px}
 /* v3 look */
-header{align-items:center;padding-bottom:.4rem}
-header h1{flex:1 1 auto;font-size:2.1rem;font-weight:800;letter-spacing:-.04em}
+header{align-items:center;padding-bottom:.4rem;flex-wrap:nowrap;gap:.4rem}
+header select{min-width:0;padding-left:.6rem;padding-right:1.4rem}
+header h1{flex:1 1 auto;font-size:1.8rem;font-weight:800;letter-spacing:-.04em}
 header label.fm{flex-direction:row;align-items:center;gap:0;font-size:0}
 header select{min-height:36px;padding:.2rem 1.6rem .2rem .7rem;font-size:.9rem;font-weight:600;border-radius:999px}
 button.gear{width:40px;height:40px;min-height:40px;padding:0;border-radius:50%;font-size:1.25rem}
@@ -263,6 +264,7 @@ body{padding-bottom:calc(96px + env(safe-area-inset-bottom))}
 <h3>Substitution plan</h3>
 <p class="hint">Automatic rotation so every available player gets equal time on the pitch. Players marked “Exclude from sub” in the Squad tab are left out.</p>
 <label class="hint">Match length (mins) <input id="matchMins" class="on" type="number" min="1" max="200"></label>
+<label class="hint">First sub after (mins) <input id="firstSub" class="on" type="number" min="0" max="100" placeholder="0"></label>
 <div class="grp-card"><ul id="plan"></ul></div>
 <h3>Playing time</h3>
 <div class="grp-card"><ul id="report"></ul></div>
@@ -277,6 +279,11 @@ body{padding-bottom:calc(96px + env(safe-area-inset-bottom))}
 <p class="hint" id="psInfo"></p>
 <div class="actgrid" id="psActs"></div>
 <div class="ctl"><button class="sec" id="psOff" type="button">Take off pitch</button></div>
+</div></div>
+<div class="sheet" id="picker"><div class="bg" data-sheetclose></div><div class="panel" role="dialog" aria-label="Choose a player">
+<div class="grab"></div>
+<div class="sheethead"><h2>Choose a player</h2><button class="sec" type="button" data-sheetclose>Cancel</button></div>
+<ul id="pkList"></ul>
 </div></div>
 <div id="toast" role="status" aria-live="polite"></div>
 <div class="overlay" id="login"><form class="card" id="loginForm">
@@ -375,9 +382,10 @@ function render(){
   document.querySelectorAll("input[data-on]").forEach(i=>{i.onpointerdown=e=>e.stopPropagation();i.onchange=()=>{P(i.dataset.on).on=i.value===""?null:Math.max(0,+i.value);save();render()}});
   document.querySelectorAll("#bench li.bench").forEach(li=>li.onclick=e=>{if(e.target.closest("input,button"))return;if(!dragged)benchPick(li.dataset.id)});
   initDrag();
-  $("squad").innerHTML=S.players.map(p=>`<li${p.avail===false?' style="opacity:.55"':""}><input type="checkbox" data-avail="${p.id}" title="Available"${p.avail===false?"":" checked"}><span class="grow">${esc(p.name)}</span><span class="positions">${["GK","D","M","F"].map(v=>`<label class="pos-choice"><input type="checkbox" data-player-pos="${p.id}" value="${v}"${playerPositions(p).includes(v)?" checked":""}>${v}</label>`).join("")}</span><label class="pos-choice" title="Exclude from substitution plan"><input type="checkbox" data-nosub="${p.id}"${p.noSub?" checked":""}>Exclude from sub</label><button class="sec" data-del="${p.id}">✕</button></li>`).join("");
+  $("squad").innerHTML=S.players.map(p=>`<li${p.avail===false?' style="opacity:.55"':""}><input type="checkbox" data-avail="${p.id}" title="Available"${p.avail===false?"":" checked"}><span class="grow">${esc(p.name)}</span><span class="positions">${["GK","D","M","F"].map(v=>`<label class="pos-choice"><input type="checkbox" data-player-pos="${p.id}" value="${v}"${playerPositions(p).includes(v)?" checked":""}>${v}</label>`).join("")}</span><label class="pos-choice" title="Start on the bench as a substitute"><input type="checkbox" data-sub="${p.id}"${p.sub?" checked":""}>Sub</label><label class="pos-choice" title="Exclude from substitution plan"><input type="checkbox" data-nosub="${p.id}"${p.noSub?" checked":""}>Exclude from sub</label><button class="sec" data-del="${p.id}">✕</button></li>`).join("");
   const av=S.players.filter(p=>p.avail!==false).length;$("squadTotals").textContent=`Total players: ${S.players.length} · Available: ${av} · Unavailable: ${S.players.length-av}`;
   document.querySelectorAll("[data-avail]").forEach(c=>c.onchange=()=>{P(c.dataset.avail).avail=c.checked;sel=null;save();render()});
+  document.querySelectorAll("[data-sub]").forEach(c=>c.onchange=()=>{const p=P(c.dataset.sub);p.sub=c.checked;if(c.checked){const i=S.slots.indexOf(p.id);if(i>=0)S.slots[i]=null}sel=null;save();render()});
   document.querySelectorAll("[data-nosub]").forEach(c=>c.onchange=()=>{P(c.dataset.nosub).noSub=c.checked;save();render()});
   document.querySelectorAll("[data-player-pos]").forEach(c=>c.onchange=()=>{const p=P(c.dataset.playerPos);p.positions=[...document.querySelectorAll(`[data-player-pos="${c.dataset.playerPos}"]:checked`)].map(x=>x.value);save();render()});
   document.querySelectorAll("[data-del]").forEach(b=>b.onclick=()=>{S.players=S.players.filter(p=>p.id!==b.dataset.del);sel=null;save();render()});
@@ -401,20 +409,23 @@ function subPlan(){
   const A=S.players.filter(p=>p.avail!==false&&!p.noSub),N=count()-fixed,L=(S.matchMins||0)*60;
   if(!L||A.length<=N||N<1)return null;
   const B=A.length-N,seg=L/A.length,steps=[];
+  const D=Math.min(S.firstSub||0,L/2)*60,seg2=(L-D)/(A.length-1);
   const benchAt=k=>new Set(Array.from({length:B},(_,j)=>(k*B+j)%A.length));
   for(let k=1;k<A.length;k++){
    const prev=benchAt(k-1),cur=benchAt(k);
    const on=[...prev].filter(i=>!cur.has(i)),off=[...cur].filter(i=>!prev.has(i));
-   steps.push({t:Math.round(k*seg),on:on.map(i=>A[i].name),off:off.map(i=>A[i].name),onIds:on.map(i=>A[i].id),offIds:off.map(i=>A[i].id)})}
+   steps.push({t:Math.round(D>0?D+(k-1)*seg2:k*seg),on:on.map(i=>A[i].name),off:off.map(i=>A[i].name),onIds:on.map(i=>A[i].id),offIds:off.map(i=>A[i].id)})}
   return{steps,each:L*N/A.length,start:[...benchAt(0)].map(i=>A[i].name)}}
 function renderTimes(){
   if(document.activeElement!==$("matchMins"))$("matchMins").value=S.matchMins||"";
+  if(document.activeElement!==$("firstSub"))$("firstSub").value=S.firstSub||"";
   const A=S.players.filter(p=>p.avail!==false),L=(S.matchMins||0)*60;
   $("report").innerHTML=A.length?A.map(p=>{const s=p.secs||0;
    return`<li><span class="grow">${esc(p.name)}</span><span class="mins">${fmtSecs(s)}${L?` (${Math.round(100*s/L)}% of match)`:""}${S.slots.includes(p.id)?" · on pitch":""}</span></li>`}).join(""):"<li class='hint'>No players.</li>";
   const pl=subPlan();
   $("plan").innerHTML=pl?`<li class="hint">Start on bench: ${pl.start.map(esc).join(", ")}. Target ≈ ${fmtSecs(pl.each)} each.</li>`+pl.steps.map(s=>`<li${S.seconds>=s.t&&S.seconds<s.t+60?' class="due"':""}><span class="grow">${mmss(s.t)} – ${s.on.map(esc).join(", ")} on, ${s.off.map(esc).join(", ")} off</span></li>`).join(""):`<li class="hint">${L?"Needs more available players than on-pitch places.":"Enter the match length to generate a plan."}</li>`}
 $("matchMins").onchange=e=>{S.matchMins=Math.max(0,+e.target.value||0);render()};
+$("firstSub").onchange=e=>{S.firstSub=Math.max(0,+e.target.value||0);S.subsDone=[];render()};
 const ACTIONS=[{k:"goal",i:"⚽",t:"Goal"},{k:"assist",i:"🅰️",t:"Assist"},{k:"amazing",i:"⭐",t:"Amazing play"},{k:"save",i:"🧤",t:"Great save"}];
 const EVLABEL={goal:["⚽","Goal"],assist:["🅰️","Assist"],amazing:["⭐","Amazing play"],save:["🧤","Great save"],oppGoal:["🥅","Goal"],period:["⏱️",""]};
 const ORD=["1st","2nd","3rd","4th"];
@@ -639,10 +650,16 @@ $("finishMatch").onclick=()=>{
   resetMatch();showTab("season");toast("Match saved to season")};
 function esc(s){return s.replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]))}
 function pick(idx){
+  if(sel===null&&!S.slots[idx]){openPicker(idx);return}
   if(sel===null){sel=idx}
   else if(sel===idx){sel=null}
   else{swap(sel,{slot:idx});sel=null}
   render()}
+function openPicker(idx){
+  const b=bench();
+  $("pkList").innerHTML=b.length?b.map(p=>`<li class="bench" data-pk="${p.id}"><span class="grow">${esc(p.name)}${posLabel(p)?` <small>(${esc(posLabel(p))})</small>`:""}</span>${p.sub?"<small>Sub</small>":""}</li>`).join(""):`<li class="hint">No players on the bench. Add players in the Squad tab.</li>`;
+  document.querySelectorAll("#pkList [data-pk]").forEach(li=>li.onclick=()=>{swap(idx,{player:li.dataset.pk});closeSheets();render()});
+  openSheet("picker")}
 function benchPick(id){
   if(sel===null){const e=S.slots.indexOf(null);if(e>=0){S.slots[e]=id;S.log.unshift(`${mmss(S.seconds)} – ${P(id).name} on`);render()}return}
   swap(sel,{player:id});sel=null;render()}
@@ -807,7 +824,7 @@ function normalizeImportedState(st){
    const id=newId();ids.set(p.id,id);
    players.push({id,name:p.name,secs:Number.isFinite(+p.secs)&&+p.secs>=0?+p.secs:0,
     positions:Array.isArray(p.positions)?p.positions.filter(x=>["GK","D","M","F"].includes(x)):p.pos&&["GK","D","M","F"].includes(p.pos)?[p.pos]:[],
-    avail:p.avail!==false,noSub:!!p.noSub,on:Number.isFinite(+p.on)&&p.on!==null?Math.max(0,+p.on):null});
+    avail:p.avail!==false,noSub:!!p.noSub,sub:!!p.sub,on:Number.isFinite(+p.on)&&p.on!==null?Math.max(0,+p.on):null});
   }
   if(!Array.isArray(st.slots)||!Array.isArray(st.log)||!Array.isArray(st.warmup||[]))return null;
   const slots=st.slots.map(id=>id==null?null:ids.get(id)||null);
@@ -819,6 +836,7 @@ function normalizeImportedState(st){
    log:st.log.slice(0,500).filter(x=>typeof x==="string").map(x=>x.slice(0,500)),
    seconds:Number.isFinite(+st.seconds)&&+st.seconds>=0?+st.seconds:0,running:false,
    matchMins:Math.min(200,Math.max(0,+st.matchMins||0)),
+   firstSub:Math.min(100,Math.max(0,+st.firstSub||0)),
    warmup:warmup.map(w=>({name:w.name,mins:Math.min(60,Math.max(0,+w.mins||0)),done:!!w.done}))};
 }
 function renderHistory(){
