@@ -1,6 +1,7 @@
 # FootballLineup
 
-A lightweight, browser-based tool for planning football team line-ups and managing match-day substitutions. The app is a single HTML file with no build step or external dependencies.
+A lightweight, browser-based tool for planning football team line-ups and managing match-day substitutions. The UI is a single HTML file (index.html). Accounts and cloud sync use Convex; the client is bundled into cloud-auth.js with 
+pm run build (only needed after editing src/).
 
 ## Screenshots
 
@@ -24,7 +25,7 @@ Screenshots use fictional sample players and team data.
    ```
 
 3. Open `http://localhost:8000` in your browser.
-4. On first launch, create an administrator account. The password must be at least eight characters.
+4. Create an account with your email and a password of at least eight characters.
 
 ## Using the app
 
@@ -39,8 +40,8 @@ Screenshots use fictional sample players and team data.
 - **Share:** Share a result card, a line-up image, line-up text or a match summary using the device share sheet (falls back to saving or copying).
 - **Install:** Host the files over HTTPS and use *Add to Home Screen* to install the app and use it offline.
 - **Save and share:** Save line-ups in the browser, optionally set a default line-up, and import or export saved plans as JSON. Export the current or a saved line-up as a PDF.
-- **Manage accounts:** An administrator can create users, reset passwords, and remove accounts from the Admin panel.
+- **Accounts and sync:** Your team, players and match history are saved to your account and restored when you sign in on any device. Log out and **Delete my account** (which erases your cloud data) are in settings.
 
 ## Data and privacy
 
-Line-ups, saved plans, account records, and match history are stored in the browser's local storage; session information is stored in browser storage as well. Data is local to that browser and origin and is not synchronized to a server. Export plans regularly if you need a backup or want to move them to another browser.
+Data is kept in the browser's local storage and synced to your Convex-hosted account (email and password sign-in). Logging out clears local data from the device. Deleting your account removes your cloud data.
