@@ -230,7 +230,7 @@ body{padding-bottom:calc(96px + env(safe-area-inset-bottom))}
 <main data-tab="match">
 <section class="match-tab">
 <div class="pitch" id="pitch"></div>
-<div class="ctl evbar"><button class="sec" id="undoBtn" type="button">↩︎ Undo</button><button class="sec" id="oppGoalBtn" type="button">🥅 Opposition goal</button><button class="sec" id="waBtn" type="button">💬 WhatsApp</button><span class="grow"></span><button class="sec" id="toolsBtn" type="button">⋯ Match tools</button></div>
+<div class="ctl evbar"><button class="sec" id="undoBtn" type="button">↩︎ Undo</button><button class="sec" id="oppGoalBtn" type="button">🥅 Opposition goal</button><button class="sec" id="saveTeamBtn" type="button">💾 Save pitch</button><button class="sec" id="waBtn" type="button">💬 WhatsApp</button><span class="grow"></span><button class="sec" id="toolsBtn" type="button">⋯ Match tools</button></div>
 <div id="strip"></div>
 <p class="hint" id="hint">Tap a player for ⚽ or ⋯ (more actions). Drag players to move them, or tap one position then another to swap.</p>
 </section>
@@ -563,6 +563,8 @@ function renderPeriodSeg(n,p,w){
   let h="";for(let i=1;i<=n;i++)h+=`<button type="button" role="tab" data-per="${i}" class="${!S.over&&p===i?"on":""}">${w[0].toUpperCase()}${i}</button>`;
   h+=`<button type="button" role="tab" data-per="ft" class="${S.over?"on":""}">FT</button>`;
   $("periodSeg").innerHTML=h;
+  const cur=Math.min(p,n),sb=$("saveTeamBtn"),has=teamIds(cur).length>0;
+  sb.textContent=`💾 Save ${w[0].toUpperCase()}${cur}${has?" ✓":""}`;sb.dataset.per=cur;
   document.querySelectorAll("#periodSeg [data-per]").forEach(b=>b.onclick=()=>gotoPeriod(b.dataset.per))}
 function gotoPeriod(v){
   const n=S.periodCount||2,cur=S.period||1;
@@ -651,6 +653,8 @@ function resultCanvas(){
 
 $("shareLineup").onclick=shareLineupImage;
 $("shareText").onclick=()=>shareText(lineupText(),S.team||"Team line-up");
+$("saveTeamBtn").onclick=()=>{const i=+$("saveTeamBtn").dataset.per||1,w=periodWord(S.periodCount||2);
+  (S.teams=S.teams||{})[i]=S.slots.filter(Boolean);toast(`Saved ${ORD[i-1]} ${w} pitch`);render()};
 $("waBtn").onclick=async()=>{
   const blob=await new Promise(r=>lineupCanvas().toBlob(r,"image/png"));
   const file=blob&&new File([blob],((S.team||"lineup").replace(/[^\w-]+/g,"_")||"lineup")+"-lineup.png",{type:"image/png"});
