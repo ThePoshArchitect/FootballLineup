@@ -171,6 +171,9 @@ button.gear{width:40px;height:40px;min-height:40px;padding:0;border-radius:50%;f
 button.big{background:#fff;color:var(--bk);box-shadow:0 4px 14px rgba(0,0,0,.25);border-radius:999px;font-weight:800;letter-spacing:.01em}
 button.big.run{background:var(--warn);color:#1c1c1e}
 .mbar .next{background:rgba(255,255,255,.12);color:#fff}
+.mbar .seg{display:flex;gap:.3rem;margin-top:.55rem;background:rgba(255,255,255,.1);border-radius:999px;padding:.2rem}
+.mbar .seg button{flex:1;min-height:34px;padding:.2rem .3rem;border:0;border-radius:999px;background:transparent;color:rgba(255,255,255,.75);font-weight:700;font-size:.9rem}
+.mbar .seg button.on{background:#fff;color:#07120b}
 .mbar .next.soon,.mbar .next.due{background:var(--warn);color:#1c1c1e;outline:0}
 .mbar .next button.sec{background:rgba(0,0,0,.15);color:inherit}
 .mbar .next button:not(.sec){background:#1c1c1e;color:#fff}
@@ -212,19 +215,22 @@ body{padding-bottom:calc(96px + env(safe-area-inset-bottom))}
 <label>Team colour<input id="teamColor" type="color" value="#12803f" aria-label="Team colour"></label>
 </div>
 <div class="ctl" style="margin-top:.8rem"><button class="sec" id="saveBtn">💾 Save / Load</button><button class="sec" id="pdfBtn">📄 Export PDF</button>
-<button class="sec" id="adminBtn" hidden>👤 Admin</button><button class="sec" id="logoutBtn">Log out</button></div>
+<button class="sec" id="logoutBtn">Log out</button></div>
+<p class="hint" id="acctEmail" style="margin-top:.8rem"></p>
+<div class="ctl"><button class="sec danger" id="deleteAcctBtn" type="button">Delete my account</button></div>
 </div></div>
 <div class="mbar">
 <div class="mrow"><span class="crest" id="crest">U</span><div class="score"><span class="side" id="scoreUs">Us</span><b id="scoreNum">0 – 0</b><input id="oppName" class="side" placeholder="Opposition" maxlength="40" aria-label="Opposition name"></div></div>
 <div class="mrow"><div class="clockbox"><span class="clock" id="clock">00:00</span><span class="hint" id="periodLabel"></span></div>
 <button class="big" id="startStop">Start</button><button class="sec" id="endPeriod" type="button"></button></div>
+<div class="seg" id="periodSeg" role="tablist" aria-label="Period"></div>
 <div id="nextSub"></div>
 </div>
 <nav class="tabs"><button id="tabMatch" class="active" type="button">⚽ Match</button><button id="tabSquad" type="button">👥 Squad</button><button id="tabSeason" type="button">📈 Season</button></nav>
 <main data-tab="match">
 <section class="match-tab">
 <div class="pitch" id="pitch"></div>
-<div class="ctl evbar"><button class="sec" id="undoBtn" type="button">↩︎ Undo</button><button class="sec" id="oppGoalBtn" type="button">🥅 Opposition goal</button><span class="grow"></span><button class="sec" id="toolsBtn" type="button">⋯ Match tools</button></div>
+<div class="ctl evbar"><button class="sec" id="undoBtn" type="button">↩︎ Undo</button><button class="sec" id="oppGoalBtn" type="button">🥅 Opposition goal</button><button class="sec" id="waBtn" type="button">💬 WhatsApp</button><span class="grow"></span><button class="sec" id="toolsBtn" type="button">⋯ Match tools</button></div>
 <div id="strip"></div>
 <p class="hint" id="hint">Tap a player for ⚽ or ⋯ (more actions). Drag players to move them, or tap one position then another to swap.</p>
 </section>
@@ -272,6 +278,9 @@ body{padding-bottom:calc(96px + env(safe-area-inset-bottom))}
 <div class="grp-card"><div class="log"><ul id="log"></ul></div></div>
 <h3>Clock and periods</h3>
 <div class="ctl"><select id="periodCount" aria-label="Match periods"><option value="2">2 halves</option><option value="3">3 thirds</option><option value="4">4 quarters</option></select><button class="sec" id="resetClock" type="button">Reset match</button></div>
+<h3>Team for each period</h3>
+<p class="hint">Set up the pitch, then tap “Save pitch”. That team is put on the pitch automatically when the period starts.</p>
+<div class="grp-card"><ul id="periodTeams"></ul></div>
 </div></div>
 <div class="sheet" id="psheet"><div class="bg" data-sheetclose></div><div class="panel" role="dialog" aria-label="Player actions">
 <div class="grab"></div>
@@ -288,25 +297,11 @@ body{padding-bottom:calc(96px + env(safe-area-inset-bottom))}
 <div id="toast" role="status" aria-live="polite"></div>
 <div class="overlay" id="login"><form class="card" id="loginForm">
 <h2 id="loginTitle">Sign in</h2>
-<p class="hint" id="loginHint"></p>
-<label>Username<input id="lUser" autocomplete="username" required maxlength="40"></label>
-<label>Password<input id="lPass" type="password" autocomplete="current-password" required></label>
-<label class="chk" id="rememberRow"><input type="checkbox" id="lRemember"> Remember me</label>
-<p class="err" id="loginErr"></p>
-<button id="loginGo">Sign in</button><button type="button" class="sec" id="forgotBtn">Forgot password?</button></form></div>
-<div class="overlay modal" id="admin"><div class="card">
-<h2>Admin – user accounts</h2>
-<ul id="userList"></ul>
-<form id="passwordResetForm" class="card" style="box-shadow:none;padding:0">
-<label>Reset password for<select id="resetUser" required></select></label>
-<label>New password (min 8 characters)<input id="resetPass" type="password" required minlength="8" autocomplete="new-password"></label>
-<p class="err" id="resetErr"></p><button>Reset password</button></form>
-<form id="userForm" class="card" style="box-shadow:none;padding:0">
-<label>New username<input id="nUser" required maxlength="40" autocomplete="off"></label>
-<label>Password (min 8 characters)<input id="nPass" type="password" required minlength="8" autocomplete="new-password"></label>
-<label class="chk"><input type="checkbox" id="nAdmin"> Administrator</label>
-<p class="err" id="adminErr"></p><button>Create user</button></form>
-<button class="sec" data-close="admin">Close</button></div></div>
+<p class="hint" id="loginHint">Sign in to keep your team on every device.</p>
+<label>Email<input id="lUser" type="email" autocomplete="email" required maxlength="120"></label>
+<label>Password<input id="lPass" type="password" autocomplete="current-password" required minlength="8"></label>
+<p class="err" id="loginErr" role="alert"></p>
+<button id="loginGo">Sign in</button><button type="button" class="sec" id="modeBtn">Create an account</button></form></div>
 <div class="overlay modal" id="saves"><div class="card">
 <h2>Saved line-ups</h2>
 <p class="hint">Mark a saved squad as default (★) to load it every time the app opens.</p>
@@ -321,6 +316,7 @@ body{padding-bottom:calc(96px + env(safe-area-inset-bottom))}
 <h2>Automatic history</h2>
 <div id="historyList"></div>
 <button class="sec" data-close="saves">Close</button></div></div>
+<script src="cloud-auth.js"></script>
 <script>
 function showTab(t){document.body.dataset.tab=t;document.querySelector("main").dataset.tab=t;[["tabMatch","match"],["tabSquad","squad"],["tabSeason","season"]].forEach(([id,k])=>$(id).classList.toggle("active",t===k));if(t==="season")renderSeason();window.scrollTo(0,0)}
 document.addEventListener("DOMContentLoaded",()=>{$("tabMatch").onclick=()=>showTab("match");$("tabSquad").onclick=()=>showTab("squad");$("tabSeason").onclick=()=>showTab("season")});
@@ -533,8 +529,8 @@ function renderMatchExtras(){
   const n=S.periodCount||2,p=Math.min(S.period||1,n),w=periodWord(n);
   $("periodCount").value=String(n);
   $("periodLabel").textContent=S.over?"Full time":`${ORD[p-1]} ${w}`;
-  $("endPeriod").disabled=!!S.over;$("endPeriod").textContent=p<n?`End ${ORD[p-1]} ${w}`:"Full time";
-  renderNextSub();applyTheme();renderStrip();renderSetup();
+  $("endPeriod").disabled=!!S.over;$("endPeriod").textContent="Full time";
+  renderNextSub();applyTheme();renderStrip();renderSetup();renderPeriodTeams();renderPeriodSeg(n,p,w);
   $("startStop").classList.toggle("run",!!S.running);
   if(document.querySelector("main").dataset.tab==="season")renderSeason()}
 function loadMatches(){try{const m=JSON.parse(localStorage.getItem(MKEY));return Array.isArray(m)?m:[]}catch(e){return[]}}
@@ -548,6 +544,30 @@ function renderSeason(){
   $("seasonTable").innerHTML=list.length?`<tr><th>Player</th><th>Apps</th><th>Min</th><th>⚽</th><th>🅰️</th><th>⭐</th><th>🧤</th></tr>`+list.map(a=>`<tr><td>${esc(a.name)}</td><td>${a.apps}</td><td>${Math.round(a.secs/60)}</td><td>${a.goal}</td><td>${a.assist}</td><td>${a.amazing}</td><td>${a.save}</td></tr>`).join(""):"";
   $("seasonMatches").innerHTML=ms.map(m=>`<li><span class="grow">${esc(m.team||"Us")} ${m.us} – ${m.them} ${esc(m.opp||"Opposition")}<br><small class="mins">${new Date(m.ts).toLocaleDateString()}</small></span><button type="button" class="sec" data-mdel="${m.id}" aria-label="Delete match">✕</button></li>`).join("");
   document.querySelectorAll("[data-mdel]").forEach(b=>b.onclick=()=>{if(confirm("Delete this match from the season?")){localStorage.setItem(MKEY,JSON.stringify(loadMatches().filter(m=>m.id!==b.dataset.mdel)));renderSeason()}})}
+function teamIds(i){return((S.teams||{})[i]||[]).filter(id=>P(id)&&P(id).avail!==false)}
+function applyTeam(i){
+  const t=(S.teams||{})[i];if(!t)return false;
+  S.slots=t.map(id=>P(id)&&P(id).avail!==false?id:null);
+  S.log.unshift(`${mmss(S.seconds)} – ${ORD[i-1]} ${periodWord(S.periodCount||2)} team on`);return true}
+function renderPeriodTeams(){
+  const n=S.periodCount||2,w=periodWord(n);let h="";
+  for(let i=1;i<=n;i++){const ids=teamIds(i);
+   h+=`<li><span class="grow"><b>${ORD[i-1]} ${w}</b><br><small class="mins">${ids.length?esc(ids.map(id=>P(id).name).join(", ")):"Not set"}</small></span><button type="button" class="sec" data-tsave="${i}">Save pitch</button>${ids.length?`<button type="button" class="sec" data-tuse="${i}">Use now</button>`:""}</li>`}
+  $("periodTeams").innerHTML=h;
+  document.querySelectorAll("[data-tsave]").forEach(b=>b.onclick=()=>{(S.teams=S.teams||{})[b.dataset.tsave]=S.slots.filter(Boolean);toast(`Saved ${ORD[b.dataset.tsave-1]} ${w} team`);render()});
+  document.querySelectorAll("[data-tuse]").forEach(b=>b.onclick=()=>{applyTeam(+b.dataset.tuse);closeSheets();render()})}
+function renderPeriodSeg(n,p,w){
+  let h="";for(let i=1;i<=n;i++)h+=`<button type="button" role="tab" data-per="${i}" class="${!S.over&&p===i?"on":""}">${w[0].toUpperCase()}${i}</button>`;
+  h+=`<button type="button" role="tab" data-per="ft" class="${S.over?"on":""}">FT</button>`;
+  $("periodSeg").innerHTML=h;
+  document.querySelectorAll("#periodSeg [data-per]").forEach(b=>b.onclick=()=>gotoPeriod(b.dataset.per))}
+function gotoPeriod(v){
+  const n=S.periodCount||2,cur=S.period||1;
+  if(v==="ft"){if(S.over)return;addEvent("period",null,"Full time");S.over=true;setRun(false);return}
+  const i=+v;if(i===cur&&!S.over)return;
+  if(!S.over&&i>cur)addEvent("period",null,`End of ${ORD[cur-1]} ${periodWord(n)}`);
+  S.over=false;S.period=i;setRun(false);
+  if(applyTeam(i))toast(`${ORD[i-1]} ${periodWord(n)} team on the pitch`);render()}
 function resetMatch(){S.seconds=0;S.log=[];S.events=[];S.period=1;S.over=false;S.subsDone=[];alerted.clear();S.players.forEach(p=>p.secs=0);setRun(false)}
 const minutesOf=p=>Math.round((p.secs||0)/60);
 function lineupText(){
@@ -628,6 +648,12 @@ function resultCanvas(){
 
 $("shareLineup").onclick=shareLineupImage;
 $("shareText").onclick=()=>shareText(lineupText(),S.team||"Team line-up");
+$("waBtn").onclick=async()=>{
+  const blob=await new Promise(r=>lineupCanvas().toBlob(r,"image/png"));
+  const file=blob&&new File([blob],((S.team||"lineup").replace(/[^\w-]+/g,"_")||"lineup")+"-lineup.png",{type:"image/png"});
+  if(file&&navigator.canShare&&navigator.canShare({files:[file]})){try{await navigator.share({files:[file],title:S.team||"Team line-up"});return}catch(e){if(e.name==="AbortError")return}}
+  const t=lineupText().split("\n");t[0]="*"+t[0]+"*";window.open("https://wa.me/?text="+encodeURIComponent(t.join("\n")),"_blank","noopener");
+  toast("Image sharing isn't supported here, so the line-up was sent as text")};
 $("shareSummary").onclick=()=>shareText(summaryText(),(S.team||"Match")+" summary");
 $("oppName").oninput=e=>{S.opp=e.target.value;save();render()};
 $("oppGoalBtn").onclick=()=>{addEvent("oppGoal",null);save();render()};
@@ -636,11 +662,7 @@ $("toolsBtn").onclick=()=>openSheet("tools");
 $("teamColor").oninput=e=>{S.color=e.target.value;applyTheme();save()};
 $("shareResult").onclick=()=>shareCanvas(resultCanvas(),"result");
 $("periodCount").onchange=e=>{S.periodCount=+e.target.value;S.period=Math.min(S.period||1,S.periodCount);render()};
-$("endPeriod").onclick=()=>{
-  const n=S.periodCount||2,p=S.period||1;if(S.over)return;
-  if(p<n){addEvent("period",null,`End of ${ORD[p-1]} ${periodWord(n)}`);S.period=p+1}
-  else{addEvent("period",null,"Full time");S.over=true}
-  setRun(false)};
+$("endPeriod").onclick=()=>gotoPeriod("ft");
 $("finishMatch").onclick=()=>{
   if(!confirm("Save this match to your season stats and start a new one?"))return;
   const sc=score(),F=["goal","assist","amazing","save"];
@@ -721,7 +743,7 @@ $("startStop").onclick=()=>setRun(!S.running);
 $("resetClock").onclick=()=>{if(confirm("Reset the clock, minutes played and match events?"))resetMatch()};
 $("resetAll").onclick=()=>{if(confirm("Delete the whole squad and line-up?")){localStorage.removeItem(KEY);S=load();sel=null;setRun(false)}};
 const wasRunning=S.running;S.running=false;render();if(wasRunning)setRun(true);
-const UKEY="lineup-users-v1",SKEY="lineup-session-v1",SAVEKEY="lineup-saves-v1";
+const SAVEKEY="lineup-saves-v1";
 const jget=(st,k,d)=>{try{const v=JSON.parse(st.getItem(k));return v==null?d:v}catch(e){return d}};
 const historyEntries=()=>jget(localStorage,HISTORY_KEY,[]);
 function scheduleHistory(){
@@ -741,76 +763,36 @@ function scheduleHistory(){
    localStorage.setItem(HISTORY_KEY,JSON.stringify([{id,ts:Date.now(),state},...historyEntries()].slice(0,50)));
    lastHistorySignature=signature;lastHistoryAt=Date.now();renderHistory();
   },1500)}
-const users=()=>jget(localStorage,UKEY,[]);
-const hex=b=>[...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,"0")).join("");
-async function hashPw(pw,salt){
-  if(!(window.crypto&&crypto.subtle))throw new Error("Secure context (https or localhost) required for password hashing");
-  const k=await crypto.subtle.importKey("raw",new TextEncoder().encode(pw),"PBKDF2",false,["deriveBits"]);
-  return hex(await crypto.subtle.deriveBits({name:"PBKDF2",hash:"SHA-256",salt:new TextEncoder().encode(salt),iterations:150000},k,256))}
-async function makeUser(name,pw,admin){
-  const salt=hex(crypto.getRandomValues(new Uint8Array(16)));
-  return{name,salt,hash:await hashPw(pw,salt),admin:!!admin}}
-function session(){
-  const s=jget(sessionStorage,SKEY,null)||jget(localStorage,SKEY,null);
-  if(!s||(s.exp&&s.exp<Date.now()))return null;
-  const u=users().find(x=>x.name===s.user);return u?{user:u.name,admin:u.admin}:null}
-function startSession(u,remember){
-  sessionStorage.removeItem(SKEY);localStorage.removeItem(SKEY);
-  if(remember)localStorage.setItem(SKEY,JSON.stringify({user:u.name,exp:Date.now()+30*864e5}));
-  else sessionStorage.setItem(SKEY,JSON.stringify({user:u.name}))}
+let signUpMode=false;
+const cloud=()=>window.CloudAuth;
+const session=()=>cloud()&&cloud().isSignedIn()?{user:cloud().email}:null;
+function setMode(up){signUpMode=up;
+  $("loginTitle").textContent=up?"Create account":"Sign in";
+  $("loginGo").textContent=up?"Create account":"Sign in";
+  $("modeBtn").textContent=up?"I already have an account":"Create an account";
+  $("lPass").autocomplete=up?"new-password":"current-password";
+  $("loginHint").textContent=up?"Use at least 8 characters for your password.":"Sign in to keep your team on every device.";
+  $("loginErr").textContent=""}
 function showApp(){
   const s=session();
   document.body.classList.toggle("locked",!s);
   $("login").classList.toggle("show",!s);
-  if(!s){const first=users().length===0;
-   $("loginTitle").textContent=first?"Create administrator account":"Sign in";
-   $("loginHint").textContent=first?"First run: choose the admin username and password (min 8 characters).":"";
-   $("loginGo").textContent=first?"Create admin":"Sign in";
-   $("rememberRow").hidden=first;$("forgotBtn").hidden=first;$("lPass").minLength=first?8:0;
-   $("lPass").autocomplete=first?"new-password":"current-password";return}
-  $("adminBtn").hidden=!s.admin}
-$("forgotBtn").onclick=()=>{$("loginErr").textContent="Ask your team administrator to reset your password. Passwords cannot be recovered by email because accounts are stored only in this browser."};
+  $("acctEmail").textContent=s?"Signed in as "+s.user:""}
+$("modeBtn").onclick=()=>setMode(!signUpMode);
 $("loginForm").onsubmit=async e=>{e.preventDefault();$("loginErr").textContent="";
-  const name=$("lUser").value.trim(),pw=$("lPass").value;
-  try{
-   const list=users();
-   if(list.length===0){
-    if(pw.length<8){$("loginErr").textContent="Password must be at least 8 characters";return}
-    const u=await makeUser(name,pw,true);localStorage.setItem(UKEY,JSON.stringify([u]));startSession(u,false);
-   }else{
-    const u=list.find(x=>x.name.toLowerCase()===name.toLowerCase());
-    const h=u&&await hashPw(pw,u.salt);
-    if(!u||h!==u.hash){$("loginErr").textContent="Invalid username or password";return}
-    startSession(u,$("lRemember").checked)}
-   $("lPass").value="";showApp();
-  }catch(err){$("loginErr").textContent=err.message}};
-$("logoutBtn").onclick=()=>{sessionStorage.removeItem(SKEY);localStorage.removeItem(SKEY);setRun(false);showApp()};
+  if(!cloud()){$("loginErr").textContent="Can't reach the server. Check your connection and reload.";return}
+  const addr=$("lUser").value.trim(),pw=$("lPass").value;
+  $("loginGo").disabled=true;
+  try{await (signUpMode?cloud().signUp(addr,pw):cloud().signIn(addr,pw));$("lPass").value="";showApp()}
+  catch(err){$("loginErr").textContent=err.message}
+  finally{$("loginGo").disabled=false}};
+$("logoutBtn").onclick=async()=>{setRun(false);if(cloud())await cloud().signOut();showApp()};
+$("deleteAcctBtn").onclick=async()=>{
+  if(!confirm("Permanently delete your account? This cannot be undone."))return;
+  try{await cloud().deleteAccount();closeSheets();showApp();toast("Account deleted")}
+  catch(err){toast("Couldn't delete the account. Try again.")}};
+if(cloud())cloud().onChange(showApp);
 document.querySelectorAll("[data-close]").forEach(b=>b.onclick=()=>$(b.dataset.close).classList.remove("show"));
-function renderUsers(){
-  const me=session();
-  $("userList").innerHTML=users().map(u=>`<li><span class="grow">${esc(u.name)}${u.admin?" (admin)":""}</span>${me&&u.name===me.user?"":`<button class="danger" data-rmuser="${esc(u.name)}">✕</button>`}</li>`).join("");
-  $("resetUser").innerHTML=users().map(u=>`<option value="${esc(u.name)}">${esc(u.name)}</option>`).join("");
-  document.querySelectorAll("[data-rmuser]").forEach(b=>b.onclick=()=>{
-   if(!confirm("Delete user "+b.dataset.rmuser+"?"))return;
-   localStorage.setItem(UKEY,JSON.stringify(users().filter(u=>u.name!==b.dataset.rmuser)));renderUsers()})}
-$("passwordResetForm").onsubmit=async e=>{e.preventDefault();$("resetErr").textContent="";
-  const me=session(),name=$("resetUser").value,pw=$("resetPass").value;
-  if(!me||!me.admin)return;
-  if(pw.length<8){$("resetErr").textContent="Password must be at least 8 characters";return}
-  try{const list=users(),old=list.find(u=>u.name===name);if(!old)return;
-   const replacement=await makeUser(old.name,pw,old.admin);
-   localStorage.setItem(UKEY,JSON.stringify(list.map(u=>u.name===name?replacement:u)));
-   $("passwordResetForm").reset();renderUsers();$("resetErr").textContent="Password reset."}
-  catch(err){$("resetErr").textContent=err.message}};
-$("adminBtn").onclick=()=>{const s=session();if(!s||!s.admin)return;$("adminErr").textContent="";renderUsers();$("admin").classList.add("show")};
-$("userForm").onsubmit=async e=>{e.preventDefault();$("adminErr").textContent="";
-  const s=session();if(!s||!s.admin)return;
-  const name=$("nUser").value.trim(),pw=$("nPass").value;
-  if(pw.length<8){$("adminErr").textContent="Password must be at least 8 characters";return}
-  if(users().some(u=>u.name.toLowerCase()===name.toLowerCase())){$("adminErr").textContent="Username already exists";return}
-  try{const u=await makeUser(name,pw,$("nAdmin").checked);
-   localStorage.setItem(UKEY,JSON.stringify([...users(),u]));
-   $("userForm").reset();renderUsers()}catch(err){$("adminErr").textContent=err.message}};
 const saves=()=>jget(localStorage,SAVEKEY,[]);
 function snapshot(){return JSON.parse(JSON.stringify({...S,running:false}))}
 const newId=()=>crypto.randomUUID?crypto.randomUUID():String(Date.now()+Math.random());
@@ -828,6 +810,7 @@ function normalizeImportedState(st){
   }
   if(!Array.isArray(st.slots)||!Array.isArray(st.log)||!Array.isArray(st.warmup||[]))return null;
   const slots=st.slots.map(id=>id==null?null:ids.get(id)||null);
+  const teams={};if(st.teams&&typeof st.teams==="object")for(let i=1;i<=4;i++)if(Array.isArray(st.teams[i]))teams[i]=st.teams[i].map(id=>ids.get(id)).filter(Boolean);
   const warmup=(st.warmup||[]).slice(0,100);
   if(warmup.some(w=>!w||typeof w.name!=="string"||w.name.length>60))return null;
   const events=(Array.isArray(st.events)?st.events:[]).slice(0,500).filter(e=>e&&EVLABEL[e.type]).map(e=>({id:newId(),t:Math.max(0,Math.floor(+e.t)||0),period:Math.min(4,Math.max(1,Math.floor(+e.period)||1)),type:e.type,pid:(e.pid&&ids.get(e.pid))||null,name:typeof e.name==="string"?e.name.slice(0,200):""}));
@@ -836,7 +819,7 @@ function normalizeImportedState(st){
    log:st.log.slice(0,500).filter(x=>typeof x==="string").map(x=>x.slice(0,500)),
    seconds:Number.isFinite(+st.seconds)&&+st.seconds>=0?+st.seconds:0,running:false,
    matchMins:Math.min(200,Math.max(0,+st.matchMins||0)),
-   firstSub:Math.min(100,Math.max(0,+st.firstSub||0)),
+   firstSub:Math.min(100,Math.max(0,+st.firstSub||0)),teams,
    warmup:warmup.map(w=>({name:w.name,mins:Math.min(60,Math.max(0,+w.mins||0)),done:!!w.done}))};
 }
 function renderHistory(){
