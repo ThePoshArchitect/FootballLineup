@@ -1,0 +1,20 @@
+{
+  "name": "theposharchitect-friendly-train",
+  "version": "1.0.0",
+  "description": "A lightweight, browser-based tool for planning football team line-ups and managing match-day substitutions. The app is a single HTML file with no build step or external dependencies.",
+  "main": "sw.js",
+  "scripts": {
+    "build": "esbuild src/cloud-auth.js --bundle --minify --format=iife --outfile=cloud-auth.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "@auth/core": "^0.37.0",
+    "@convex-dev/auth": "^0.0.91",
+    "convex": "^1.50.0",
+    "esbuild": "^0.28.2"
+  }
+}
