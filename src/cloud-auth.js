@@ -8,6 +8,8 @@ const signInRef = makeFunctionReference("auth:signIn");
 const signOutRef = makeFunctionReference("auth:signOut");
 const meRef = makeFunctionReference("auth:me");
 const deleteRef = makeFunctionReference("auth:deleteAccount");
+const getDataRef = makeFunctionReference("userData:get");
+const saveDataRef = makeFunctionReference("userData:save");
 
 const client = new ConvexClient(URL_);
 const listeners = new Set();
@@ -125,4 +127,6 @@ window.CloudAuth = {
     notify();
   },
   me: () => client.query(meRef, {}),
+  loadData: () => client.query(getDataRef, {}),
+  saveData: (state, matches) => client.mutation(saveDataRef, { state, matches }),
 };

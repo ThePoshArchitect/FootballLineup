@@ -327,6 +327,9 @@ const FORMATIONS={
   11:{"4-4-2":[1,4,4,2],"4-3-3":[1,4,3,3],"3-5-2":[1,3,5,2],"4-2-3-1":[1,4,2,3,1]}
 };
 const KEY="lineup-manager-v1",MKEY="lineup-matches-v1";
+const OWNER_KEY="lineup-owner-v1",DIRTY_KEY="lineup-dirty-v1",SYNCED_KEY="lineup-synced-at-v1";
+let pushTimer=null,rev=0;
+function markDirty(){try{rev++;if(!session())return;localStorage.setItem(DIRTY_KEY,"1");if(!pushTimer)pushTimer=setTimeout(pushNow,5000)}catch(e){}}
 const HISTORY_KEY="lineup-history-v1",AUTO_HISTORY_KEY="lineup-auto-history-v1";
 let historyTimer=null,lastHistoryAt=0,lastHistorySignature="";
 const autoHistoryEnabled=()=>localStorage.getItem(AUTO_HISTORY_KEY)!=="false";
@@ -338,7 +341,7 @@ let S=load();
 let sel=null,timer=null,lastTick=0;
 function load(){try{const s=JSON.parse(localStorage.getItem(KEY));if(s&&s.players)return s}catch(e){}
  return{team:"",players:[],size:7,formation:"2-3-1",slots:[],log:[],seconds:0,running:false}}
-function save(){localStorage.setItem(KEY,JSON.stringify(S));scheduleHistory()}
+function save(){localStorage.setItem(KEY,JSON.stringify(S));scheduleHistory();markDirty()}
 const $=id=>document.getElementById(id);
 const rows=()=>FORMATIONS[S.size][S.formation];
 const count=()=>rows().reduce((a,b)=>a+b,0);
@@ -543,7 +546,7 @@ function renderSeason(){
   $("seasonSummary").textContent=ms.length?`Played ${ms.length} · Won ${w} · Drawn ${d} · Lost ${ms.length-w-d}${top?` · Top scorer: ${top.name} (${top.goal})`:""}`:"No matches saved yet. Tap “Finish match & save to season” on the Pitch & Subs tab.";
   $("seasonTable").innerHTML=list.length?`<tr><th>Player</th><th>Apps</th><th>Min</th><th>⚽</th><th>🅰️</th><th>⭐</th><th>🧤</th></tr>`+list.map(a=>`<tr><td>${esc(a.name)}</td><td>${a.apps}</td><td>${Math.round(a.secs/60)}</td><td>${a.goal}</td><td>${a.assist}</td><td>${a.amazing}</td><td>${a.save}</td></tr>`).join(""):"";
   $("seasonMatches").innerHTML=ms.map(m=>`<li><span class="grow">${esc(m.team||"Us")} ${m.us} – ${m.them} ${esc(m.opp||"Opposition")}<br><small class="mins">${new Date(m.ts).toLocaleDateString()}</small></span><button type="button" class="sec" data-mdel="${m.id}" aria-label="Delete match">✕</button></li>`).join("");
-  document.querySelectorAll("[data-mdel]").forEach(b=>b.onclick=()=>{if(confirm("Delete this match from the season?")){localStorage.setItem(MKEY,JSON.stringify(loadMatches().filter(m=>m.id!==b.dataset.mdel)));renderSeason()}})}
+  document.querySelectorAll("[data-mdel]").forEach(b=>b.onclick=()=>{if(confirm("Delete this match from the season?")){localStorage.setItem(MKEY,JSON.stringify(loadMatches().filter(m=>m.id!==b.dataset.mdel)));markDirty();renderSeason()}})}
 function teamIds(i){return((S.teams||{})[i]||[]).filter(id=>P(id)&&P(id).avail!==false)}
 function applyTeam(i){
   const t=(S.teams||{})[i];if(!t)return false;
@@ -668,7 +671,7 @@ $("finishMatch").onclick=()=>{
   const sc=score(),F=["goal","assist","amazing","save"];
   const rec={id:newId(),ts:Date.now(),team:S.team||"",opp:S.opp||"",us:sc.us,them:sc.them,
     players:S.players.filter(p=>p.avail!==false).map(p=>{const o={name:p.name,secs:p.secs||0};F.forEach(k=>o[k]=evCount(p.id,k));return o})};
-  localStorage.setItem(MKEY,JSON.stringify([rec,...loadMatches()].slice(0,300)));
+  localStorage.setItem(MKEY,JSON.stringify([rec,...loadMatches()].slice(0,300)));markDirty();
   resetMatch();showTab("season");toast("Match saved to season")};
 function esc(s){return s.replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]))}
 function pick(idx){
@@ -786,12 +789,41 @@ $("loginForm").onsubmit=async e=>{e.preventDefault();$("loginErr").textContent="
   try{await (signUpMode?cloud().signUp(addr,pw):cloud().signIn(addr,pw));$("lPass").value="";showApp()}
   catch(err){$("loginErr").textContent=err.message}
   finally{$("loginGo").disabled=false}};
-$("logoutBtn").onclick=async()=>{setRun(false);if(cloud())await cloud().signOut();showApp()};
+$("logoutBtn").onclick=async()=>{setRun(false);
+  if(cloud()&&session()){clearTimeout(pushTimer);pushTimer=null;
+   if(localStorage.getItem(DIRTY_KEY)){await pushNow(true);
+    if(localStorage.getItem(DIRTY_KEY)&&!confirm("Your latest changes couldn't be saved to your account. Log out anyway and lose them?"))return}
+   await cloud().signOut()}
+  wipeLocal();showApp()};
+function wipeLocal(){
+  [KEY,MKEY,"lineup-saves-v1",HISTORY_KEY,DEFAULT_KEY,OWNER_KEY,DIRTY_KEY,SYNCED_KEY].forEach(k=>localStorage.removeItem(k));
+  S=load();sel=null;render()}
+async function pushNow(once){pushTimer=null;if(!session())return;
+  const at0=rev;
+  try{const at=await cloud().saveData(JSON.stringify({...S,running:false}),JSON.stringify(loadMatches()));
+   localStorage.setItem(SYNCED_KEY,String(at));if(at0===rev)localStorage.removeItem(DIRTY_KEY)}
+  catch(e){if(!once)pushTimer=setTimeout(pushNow,30000)}}
+let pulling=false;
+async function pullAndMerge(tries=0){
+  const s=session();if(!s||pulling)return;pulling=true;
+  try{
+   const row=await cloud().loadData();
+   if(localStorage.getItem(OWNER_KEY)&&localStorage.getItem(OWNER_KEY)!==s.user)wipeLocal();
+   const adopted=!localStorage.getItem(OWNER_KEY);
+   const dirty=!!localStorage.getItem(DIRTY_KEY),synced=+localStorage.getItem(SYNCED_KEY)||0;
+   if(row&&(adopted||(!dirty&&row.updatedAt>synced))){
+    localStorage.setItem(KEY,row.state);localStorage.setItem(MKEY,row.matches);
+    localStorage.setItem(SYNCED_KEY,String(row.updatedAt));localStorage.removeItem(DIRTY_KEY);
+    S=load();S.running=false;sel=null;setRun(false);render();toast("Loaded your team from your account")}
+   else if(!row||dirty){localStorage.setItem(OWNER_KEY,s.user);await pushNow(true)}
+   localStorage.setItem(OWNER_KEY,s.user);
+  }catch(e){if(tries<3)setTimeout(()=>pullAndMerge(tries+1),3000)}
+  finally{pulling=false}}
 $("deleteAcctBtn").onclick=async()=>{
   if(!confirm("Permanently delete your account? This cannot be undone."))return;
-  try{await cloud().deleteAccount();closeSheets();showApp();toast("Account deleted")}
+  try{await cloud().deleteAccount();wipeLocal();closeSheets();showApp();toast("Account deleted")}
   catch(err){toast("Couldn't delete the account. Try again.")}};
-if(cloud())cloud().onChange(showApp);
+if(cloud())cloud().onChange(()=>{showApp();pullAndMerge()});
 document.querySelectorAll("[data-close]").forEach(b=>b.onclick=()=>$(b.dataset.close).classList.remove("show"));
 const saves=()=>jget(localStorage,SAVEKEY,[]);
 function snapshot(){return JSON.parse(JSON.stringify({...S,running:false}))}
@@ -933,7 +965,7 @@ function exportPDF(st,title,ts){
   a.download=((title||st.team||"lineup").replace(/[^\w-]+/g,"_")||"lineup")+".pdf";
   document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),1000)}
 $("pdfBtn").onclick=()=>exportPDF(S,S.team||"Team line-up");
-showApp();
+showApp();pullAndMerge();
 if("serviceWorker" in navigator&&location.protocol.startsWith("http"))navigator.serviceWorker.register("sw.js").catch(()=>{});</script>
 </body>
 </html>

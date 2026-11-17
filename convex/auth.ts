@@ -30,6 +30,11 @@ export const deleteAccount = mutation({
   handler: async (ctx) => {
     const userId = await getAuthUserId(ctx);
     if (userId === null) throw new Error("Not signed in");
+    const accountsOwned = await ctx.db
+      .query("userData")
+      .withIndex("by_user", (q) => q.eq("userId", userId))
+      .collect();
+    for (const row of accountsOwned) await ctx.db.delete(row._id);
     const accounts = await ctx.db
       .query("authAccounts")
       .withIndex("userIdAndProvider", (q) => q.eq("userId", userId))
